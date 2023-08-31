@@ -13,6 +13,10 @@ const V2FactoryAbi = [
     'event PairCreated(address indexed token0, address indexed token1, address pair, uint)'
 ];
 
+const V3FactoryAbi = [
+    'event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)'
+];
+
 const DexVariant = {
     UniswapV2: 2,
     UniswapV3: 3,
@@ -91,96 +95,76 @@ function cacheSyncedPools(pools) {
     fs.writeFileSync(cacheFile, data, { encoding: 'utf-8' });
 }
 
-async function loadAllPoolsFromV2(
-    httpsUrl,
-    factoryAddresses,
-    fromBlocks,
-    chunk
-) {
-    /*
-    Retrieves historical events from Uniswap V2 factories.
 
-    Whenever a new pool is created from the Uniswap V2 factory,
-    a "PairCreated" event is emitted. We request for all the PairCreated
-    events from the block these factories were deployed.
-
-    👉 NOTE: the process takes a really long time, because it has room for improvement.
-    This function will make requests to the RPC endpoint one batch at a time,
-    each looking at events from block range of: [fromBlock, toBlock] chunk size.
-    */
-    let pools = loadCachedPools();
-    if (Object.keys(pools).length > 0) {
-        return pools;
-    }
+// Use 'getEventsRecursive' to get all the events from a contract.
+async function loadAllPoolsFromV2(httpsUrl, factoryAddresses) {
+    // let pools = loadCachedPools();
+    // if (Object.keys(pools).length > 0) {
+    //     return pools;
+    // }
 
     const provider = new ethers.providers.JsonRpcProvider(httpsUrl);
     const toBlock = await provider.getBlockNumber();
-    
-    const decimals = {};
+
     pools = {};
-
     for (let i = 0; i < factoryAddresses.length; i++) {
+        // Use more efficient method to get events
         const factoryAddress = factoryAddresses[i];
-        const fromBlock = fromBlocks[i];
+        const factoryContract = new ethers.Contract(factoryAddress, V2FactoryAbi, provider);
+        const eventFilter = factoryContract.filters.PairCreated();
+        const iface = new ethers.utils.Interface(V2FactoryAbi);
+        const events = await getEventsRecursive(provider, eventFilter, iface, 0, toBlock);
+        
+        for (let event of events) {
+            let token0 = event.args[0];
+            let token1 = event.args[1];
 
-        const v2Factory = new ethers.Contract(factoryAddress, V2FactoryAbi, provider);
-
-        const requestParams = range(fromBlock, toBlock, chunk);
-
-        const progress = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-        progress.start(requestParams.length);
-
-        for (let i = 0; i < requestParams.length; i++) {
-            const params = requestParams[i];
-            const filter = v2Factory.filters.PairCreated;
-            const events = await v2Factory.queryFilter(filter, params[0], params[1]);
-
-            for (let event of events) {
-                let token0 = event.args[0];
-                let token1 = event.args[1];
-
-                let decimals0;
-                let decimals1;
-
-                try {
-                    if (token0 in decimals) {
-                        decimals0 = decimals[token0];
-                    } else {
-                        let token0Contract = new ethers.Contract(token0, Erc20Abi, provider);
-                        decimals0 = await token0Contract.decimals();
-                        decimals[token0] = decimals0;
-                    }
-
-                    if (token1 in decimals) {
-                        decimals1 = decimals[token1];
-                    } else {
-                        let token1Contract = new ethers.Contract(token1, Erc20Abi, provider);
-                        decimals1 = await token1Contract.decimals();
-                        decimals[token1] = decimals1;
-                    }
-                } catch (_) {
-                    // some token contracts don't exist anymore: eth_call error
-                    logger.warn(`Check if tokens: ${token0} / ${token1} still exists`);
-                    continue;
-                }
-
-                let pool = new Pool(event.args[2],
-                                    DexVariant.UniswapV2,
-                                    token0,
-                                    token1,
-                                    decimals0,
-                                    decimals1,
-                                    300);
-                pools[event.args[2]] = pool;
-            }
-
-            progress.update(i + 1);
+            // Do not use decimals for now
+            let pool = new Pool(event.args[2],
+                DexVariant.UniswapV2,
+                token0,
+                token1,
+                {fee: 300});
+            pools[event.args[2]] = pool;
         }
-
-        progress.stop();
     }
 
-    cacheSyncedPools(pools);
+    // cacheSyncedPools(pools);
+    return pools;
+}
+
+// Returns the list of pools created by a v3-compatible factory contract.
+async function loadAllPoolsFromV3(httpsUrl, factoryAddresses) {
+    const provider = new ethers.providers.JsonRpcProvider(httpsUrl);
+    const toBlock = await provider.getBlockNumber();
+
+    pools = {};
+    for (let i = 0; i < factoryAddresses.length; i++) {
+        // Use more efficient method to get events
+        const factoryAddress = factoryAddresses[i];
+        const factoryContract = new ethers.Contract(factoryAddress, V3FactoryAbi, provider);
+        const eventFilter = factoryContract.filters.PoolCreated();
+        const iface = new ethers.utils.Interface(V3FactoryAbi);
+        const events = await getEventsRecursive(provider, eventFilter, iface, 0, toBlock);
+
+        for (let event of events) {
+            // event.args = [token0, token1, fee, tickSpacing, pool]
+            let token0 = event.args[0];
+            let token1 = event.args[1];
+
+            // Do not use decimals for now
+            let pool = new Pool(event.args[4],
+                DexVariant.UniswapV3,
+                token0,
+                token1,
+                {
+                    fee: event.args[2],
+                    tickSpacing: event.args[3],
+                });
+            pools[event.args[4]] = pool;
+        }
+    }
+
     return pools;
 }
 
@@ -218,4 +202,5 @@ async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlo
 
 module.exports = {
     loadAllPoolsFromV2,
+    loadAllPoolsFromV3,
 };
