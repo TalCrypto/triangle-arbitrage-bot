@@ -10,9 +10,9 @@ const {
     SAFE_TOKENS,
 } = require('./constants');
 const { logger, blacklistTokens } = require('./constants');
-const { loadAllPoolsFromV2, loadAllPoolsFromV3 } = require('./pools');
-const { generateTriangularPaths } = require('./paths');
-const { batchGetUniswapV2Reserves } = require('./multi');
+const { loadAllPoolsFromV2, loadAllPoolsFromV3, poolsFromPaths } = require('./pools');
+const { generatePaths } = require('./paths');
+const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { getTouchedPoolReserves } = require('./utils');
 const { Bundler, Path, Flashloan, ZERO_ADDRESS } = require('./bundler');
@@ -26,42 +26,36 @@ async function main() {
 
     // Load v2 pools
     let pools_v2 = await loadAllPoolsFromV2(HTTPS_URL, factoryAddresses_v2);
-    logger.info(`Initial V2 pool count: ${Object.keys(pools).length}`);
+    logger.info(`Initial V2 pool count: ${Object.keys(pools_v2).length}`);
     
     // Load v3 pools
     let pools_v3 = await loadAllPoolsFromV3(HTTPS_URL, factoryAddresses_v3);
     logger.info(`Initial V3 pool count: ${Object.keys(pools_v3).length}`);
 
+    // Merge v2 and v3 pools
+    let pools = Object.assign(pools_v2, pools_v3);
+
     // Load decimals of tokens (only needed for displaying token amounts, not needed by the bot)
-    let tokenList = tokens.exctractTokens([pools_v2, pools_v3]);
+    let tokenList = tokens.exctractTokens(pools);
     // ...
 
     // Load safe tokens, from which we will constitute the root of our arb paths
-    // const safeTokens = await tokens.getSafeTokens(); // Only works on Ethereum mainnet
-    const safeTokens = SAFE_TOKENS;
+    const safeTokens = SAFE_TOKENS; //await tokens.getSafeTokens(); // Only works on Ethereum mainnet
     logger.info(`Safe token count: ${Object.keys(safeTokens).length}`);
     
-
-    // We should not limit ourselves to one root token.
-    // Use USDC as the arb path root.
-    // const usdcAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-    // const usdcDecimals = 6;
-    let paths = generateTriangularPaths(pools, usdcAddress);
+    // Find paths of length 2,3 starting from each safe token.
+    let s = new Date();
+    let paths = generatePaths(safeTokens, pools, 3);
+    let e = new Date();
+    logger.info(`Built ${Object.keys(paths).length} paths in ${(e - s) / 1000} seconds`);
 
     // Filter out pools that are not used in arb paths
-    pools = {};
-    for (let path of paths) {
-        if (!path.shouldBlacklist(blacklistTokens)) {
-            pools[path.pool1.address] = path.pool1;
-            pools[path.pool2.address] = path.pool2;
-            pools[path.pool3.address] = path.pool3;
-        }
-    }
+    pools = poolsFromPaths(paths);
     logger.info(`New pool count: ${Object.keys(pools).length}`);
 
-    let s = new Date();
-    let reserves = await batchGetUniswapV2Reserves(HTTPS_URL, Object.keys(pools));
-    let e = new Date();
+    s = new Date();
+    let reserves = await batchReserves(HTTPS_URL, Object.keys(pools));
+    e = new Date();
     logger.info(`Batch reserves call took: ${(e - s) / 1000} seconds`);
 
     // Transaction handler (can send transactions to mempool / bundles to Flashbots)
