@@ -151,7 +151,100 @@ function generateTriangularPaths(pools, tokenIn) {
     return paths;
 }
 
+
+function generatePaths(rootTokens, pools, maxHops) {
+    // Stores all temporary paths
+    const tempPoolPaths = []; // [[pool1, pool2, ...., poolN], ...]
+
+    // Store the input token for the next hop of each path
+    const tempOutTokens = []; // [outTokenForPath1, outTokenForPath2, ...]
+    
+    const finalPaths = [];
+
+    // Lookup table to retrieve pools by token involved
+    const tokenToPools = {}; // {token1: [pool1, pool2, ...], token2: [pool1, pool2, ...], ...}
+
+    // Build the lookup table
+    for (let pool of pools) {
+        if (!(pool.token0 in tokenToPools)) {
+            tokenToPools[pool.token0] = [];
+        }
+        if (!(pool.token1 in tokenToPools)) {
+            tokenToPools[pool.token1] = [];
+        }
+        tokenToPools[pool.token0].push(pool);
+        tokenToPools[pool.token1].push(pool);
+    }
+
+    // Define recursive function to generate paths
+    function generatePathsRecursive(tokenIn, path, stopToken, hop) {
+        // If the current hop is the last hop, we should stop here
+        if (hop == maxHops) {
+            return;
+        }
+
+        // Get all pools that involve the input token
+        let potentialPools = tokenToPools[tokenIn];
+
+        // Check if the potential pools are already in the path by comparing addresses
+        let futurePools = potentialPools.filter(pool => {
+            return !path.some(pathPool => {
+                return pathPool.address == pool.address;
+            });
+        });
+
+        // If there are no more pools to explore, we should stop here
+        if (futurePools.length == 0) {
+            return;
+        }
+
+        // For each pool, we should explore the next hop
+        for (let pool of futurePools) {
+            // Get the output token for the next hop
+            let tokenOut = pool.token0 == tokenIn ? pool.token1 : pool.token0;
+
+            // If the output token is the stop token, we should add the path to the final paths
+            let futurePath = [...path, pool];
+            if (tokenOut == stopToken) {
+                finalPaths.push({
+                    pools: futurePath,
+                    rootToken: rootToken
+                });
+            } else {
+                // Otherwise, we should explore the next hop
+                generatePathsRecursive(tokenOut, futurePath, stopToken, hop + 1);
+            }
+        }
+    }
+
+    // Use the recursive function to generate paths for each root token
+    for (let rootToken of rootTokens) {
+        generatePathsRecursive(rootToken, [], rootToken, 0);
+    }
+
+    // Add the zeroForOne array to the final path objects
+    for (let path of finalPaths) {
+        let zeroForOne = [];
+
+        // Set the first zfo with respect to the root token
+        zeroForOne.push(path.pools[0].token0 == path.rootToken);
+        let inToken = zeroForOne[0] ? path.pools[0].token0 : path.pools[0].token1;
+
+        // Set the rest of the zfo with respect to the previous pool
+        for (let i = 1; i < path.pools.length; i++) {
+            zeroForOne.push(path.pools[i].token0 == inToken);
+            inToken = zeroForOne[i] ? path.pools[i].token0 : path.pools[i].token1;
+        }
+
+        path.directions = zeroForOne;
+    }
+
+    return finalPaths;
+}
+
+
 module.exports = {
     ArbPath,
     generateTriangularPaths,
+    generatePaths,
 };
