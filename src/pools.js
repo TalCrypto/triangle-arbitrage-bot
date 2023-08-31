@@ -190,6 +190,38 @@ async function loadAllPoolsFromV2(
     return pools;
 }
 
+async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlock) {
+    // Get events from a contract recursively. If there is an error, split the block range in half and try again.
+    // Node providers typically limit to 10k events per request.
+    //
+    // eventFilter: ethers.Contract.filters object
+    // fromBlock: int
+    // toBlock: int
+    //
+    // returns: array of events
+    
+    try {
+        let events = await provider.getLogs({
+            address: eventFilter.address,
+            fromBlock: fromBlock,
+            toBlock: toBlock,
+            topics: eventFilter.topics,
+        });
+        console.log(`Found ${events.length} events from ${fromBlock} to ${toBlock}`);
+        events = events.map((event) => {
+            return iface.parseLog(event);
+        });
+        return events;
+    } catch (e) {
+        console.log("Too many events, splitting block range in half");
+        let midBlock = Math.floor((fromBlock + toBlock) / 2);
+
+        let events1 = await getEventsRecursive(provider, eventFilter, iface, fromBlock, midBlock);
+        let events2 = await getEventsRecursive(provider, eventFilter, iface, midBlock + 1, toBlock);
+        return events1.concat(events2);
+    }
+}
+
 module.exports = {
     loadAllPoolsFromV2,
 };
