@@ -24,17 +24,13 @@ class Pool {
         version,
         token0,
         token1,
-        decimals0,
-        decimals1,
-        fee
+        extra,
     ) {
         this.address = address;
         this.version = version;
         this.token0 = token0;
         this.token1 = token1;
-        this.decimals0 = decimals0;
-        this.decimals1 = decimals1;
-        this.fee = fee;
+        this.extra = extra;
     }
 
     cacheRow() {
@@ -43,9 +39,7 @@ class Pool {
             this.version,
             this.token0,
             this.token1,
-            this.decimals0,
-            this.decimals1,
-            this.fee,
+            this.extra,
         ];
     }
 }
