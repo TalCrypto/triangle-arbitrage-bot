@@ -26,3 +26,5 @@ contract FlashQuery{
         return (sqrtResult, liqResult);
 	}
 }
+
+// Deployed on Polygon at 0xa5aeC6cF29e66fD47F6a05dcc0c8aCD308d80B4E
