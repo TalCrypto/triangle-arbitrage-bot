@@ -153,15 +153,15 @@ async function loadAllPoolsFromV3(httpsUrl, factoryAddresses) {
             let token1 = event.args[1];
 
             // Do not use decimals for now
-            let pool = new Pool(event.args[4],
+            let pool = new Pool(event.args[4], // pool address
                 DexVariant.UniswapV3,
                 token0,
                 token1,
                 {
-                    fee: event.args[2],
-                    tickSpacing: event.args[3],
+                    fee: event.args[2], // fee
+                    tickSpacing: event.args[3], // tickSpacing
                 });
-            pools[event.args[4]] = pool;
+            pools[event.args[4]] = pool; // pool address
         }
     }
 
