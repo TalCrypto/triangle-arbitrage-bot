@@ -168,8 +168,8 @@ async function loadAllPoolsFromV3(httpsUrl, factoryAddresses) {
     return pools;
 }
 
+// Get events from a contract recursively. If there is an error, split the block range in half and try again.
 async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlock) {
-    // Get events from a contract recursively. If there is an error, split the block range in half and try again.
     // Node providers typically limit to 10k events per request.
     //
     // eventFilter: ethers.Contract.filters object
@@ -200,7 +200,19 @@ async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlo
     }
 }
 
+// Returns a list containing the pools found in the given paths.
+function poolsFromPaths(paths){
+    let pools = {};
+    for (let path of paths) {
+        for (let pool of path.pools) {
+            pools[pool.address] = pool;
+        }
+    }
+    return pools;
+}
+
 module.exports = {
     loadAllPoolsFromV2,
     loadAllPoolsFromV3,
+    poolsFromPaths,
 };
