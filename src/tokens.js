@@ -71,14 +71,12 @@ async function getSafeTokens(){
 }
 
 
-function exctractTokens(exchangePoolList) {// [{pool1, pool2, pool3}, {pool4, pool5, pool6}}]
+function exctractTokens(pools) {// {pool1, pool2, pool3, ...}
     let tokens = {};
 
-    for (let pools of exchangePoolList) {
-        for (let pool of Object.values(pools)) {
-            tokens[pool.token0] = true;
-            tokens[pool.token1] = true;
-        }
+    for (let pool of Object.values(pools)) {
+        tokens[pool.token0] = true;
+        tokens[pool.token1] = true;
     }
     return Object.keys(tokens);
 }
