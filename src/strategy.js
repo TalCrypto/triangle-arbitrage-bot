@@ -12,7 +12,7 @@ const { logger, blacklistTokens } = require('./constants');
 const { loadAllPoolsFromV2 } = require('./pools');
 const { generateTriangularPaths } = require('./paths');
 const { batchGetUniswapV2Reserves } = require('./multi');
-const { streamNewBlocks } = require('./streams');
+const { streamNewBlocks, streamPendingTransactions } = require('./streams');
 const { getTouchedPoolReserves } = require('./utils');
 const { Bundler, Path, Flashloan, ZERO_ADDRESS } = require('./bundler');
 
@@ -23,7 +23,7 @@ async function main() {
     const factoryBlocks = [11333218];
 
     let pools = await loadAllPoolsFromV2(
-        HTTPS_URL, factoryAddresses, factoryBlocks, 50000
+        HTTPS_URL, factoryAddresses, factoryBlocks, 10000
     );
     logger.info(`Initial pool count: ${Object.keys(pools).length}`);
 
@@ -58,8 +58,10 @@ async function main() {
     await bundler.setup();
     
     let eventEmitter = new EventEmitter();
+    let eventMemPoolEmitter = new EventEmitter();
 
-    streamNewBlocks(WSS_URL, eventEmitter);
+    //streamNewBlocks(WSS_URL, eventEmitter);
+    streamPendingTransactions(WSS_URL, eventMemPoolEmitter);
     
     eventEmitter.on('event', async (event) => {
         if (event.type == 'block') {
@@ -84,7 +86,8 @@ async function main() {
                 }, 0);
                 if (touchedPath > 0) {
                     let priceQuote = path.simulateV2Path(1, reserves);
-                    let spread = (priceQuote / (10 ** usdcDecimals) - 1) * 100;
+                    console.log("priceQuote:", priceQuote);
+                    let spread = (priceQuote / (1 * 10 ** usdcDecimals) - 1) * 100;
                     if (spread > 0) {
                         spreads[idx] = spread;
                     }
@@ -92,6 +95,12 @@ async function main() {
             }
 
             console.log('▶️ Spread over 0%: ', spreads);
+        }
+    });
+
+    eventMemPoolEmitter.on('event', async (event) => {
+        if (event.type == 'pendingTx') {
+            console.log('▶️ Tx Hash: ', event);
         }
     });
 }
