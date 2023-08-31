@@ -1,5 +1,4 @@
 const cliProgress = require('cli-progress');
-
 const { logger } = require('./constants');
 const { UniswapV2Simulator } = require('./simulator');
 
@@ -15,19 +14,13 @@ const range = (start, stop, step) => {
 
 class ArbPath {
     constructor(
-        pool1,
-        pool2,
-        pool3,
-        zeroForOne1,
-        zeroForOne2,
-        zeroForOne3
+        root, // root token, token from which the arbitrage path starts
+        pools, // pool1, pool2, pool3; The pools involved in the arbitrage path
+        directions, // zeroForOne1, zeroForOne2, ...; Indicates the direction of each swap. zfo = true means token0 -> token1.
     ) {
-        this.pool1 = pool1;
-        this.pool2 = pool2;
-        this.pool3 = pool3;
-        this.zeroForOne1 = zeroForOne1;
-        this.zeroForOne2 = zeroForOne2;
-        this.zeroForOne3 = zeroForOne3;
+        this.root = root;
+        this.pools = pools;
+        this.directions = directions;
     }
 
     nhop() {
