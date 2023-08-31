@@ -164,8 +164,8 @@ function generatePaths(rootTokens, pools, maxHops) {
     // Lookup table to retrieve pools by token involved
     const tokenToPools = {}; // {token1: [pool1, pool2, ...], token2: [pool1, pool2, ...], ...}
 
-    // Build the lookup table
-    for (let pool of pools) {
+    // Build the lookup table. pools is not iterable.
+    for (let pool of Object.values(pools)) {
         if (!(pool.token0 in tokenToPools)) {
             tokenToPools[pool.token0] = [];
         }
@@ -208,7 +208,7 @@ function generatePaths(rootTokens, pools, maxHops) {
             if (tokenOut == stopToken) {
                 finalPaths.push({
                     pools: futurePath,
-                    rootToken: rootToken
+                    rootToken: stopToken,
                 });
             } else {
                 // Otherwise, we should explore the next hop
@@ -218,8 +218,11 @@ function generatePaths(rootTokens, pools, maxHops) {
     }
 
     // Use the recursive function to generate paths for each root token
+    let pathCount = 0;
     for (let rootToken of rootTokens) {
         generatePathsRecursive(rootToken, [], rootToken, 0);
+        logger.info(`Generated ${finalPaths.length - pathCount} paths for ${rootToken}`);
+        pathCount = finalPaths.length;
     }
 
     // Add the zeroForOne array to the final path objects
