@@ -17,6 +17,7 @@ const { streamNewBlocks } = require('./streams');
 const { getTouchedPoolReserves } = require('./utils');
 const { Bundler, Path, Flashloan, ZERO_ADDRESS } = require('./bundler');
 const tokens = require('./tokens');
+const fs = require('fs');
 
 async function main() {
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
@@ -24,16 +25,28 @@ async function main() {
     const factoryAddresses_v2 = ['0xc35DADB65012eC5796536bD9864eD8773aBc74C4']; // Sushi
     const factoryAddresses_v3 = ['0x1F98431c8aD98523631AE4a59f267346ea31F984']; // Uniswap v3
 
-    // Load v2 pools
-    let pools_v2 = await loadAllPoolsFromV2(HTTPS_URL, factoryAddresses_v2);
-    logger.info(`Initial V2 pool count: ${Object.keys(pools_v2).length}`);
+    let pools_v2, pools_v3;
+
+    // // Load v2, v3 pools
+    // pools_v2 = await loadAllPoolsFromV2(HTTPS_URL, factoryAddresses_v2);
+    // pools_v3 = await loadAllPoolsFromV3(HTTPS_URL, factoryAddresses_v3);
+    // fs.writeFileSync('data/v2_pools.json', JSON.stringify(pools_v2)); // Save v2 pools to file using fs
+    // fs.writeFileSync('data/v3_pools.json', JSON.stringify(pools_v3)); // Save v3 pools to file using fs
     
-    // Load v3 pools
-    let pools_v3 = await loadAllPoolsFromV3(HTTPS_URL, factoryAddresses_v3);
+    // Read pools from file using fs
+    pools_v2 = JSON.parse(fs.readFileSync('data/v2_pools.json', 'utf8'));
+    pools_v3 = JSON.parse(fs.readFileSync('data/v3_pools.json', 'utf8'));
+    logger.info(`Initial V2 pool count: ${Object.keys(pools_v2).length}`);
     logger.info(`Initial V3 pool count: ${Object.keys(pools_v3).length}`);
+
+    // //DEBUG: Limit size for faster testing
+    // pools_v2 = Object.fromEntries(Object.entries(pools_v2).slice(0, 100));
+    // pools_v3 = Object.fromEntries(Object.entries(pools_v3).slice(0, 100));
+    // //DEBUG
 
     // Merge v2 and v3 pools
     let pools = Object.assign(pools_v2, pools_v3);
+    logger.info(`Initial pool count: ${Object.keys(pools).length}`);
 
     // Load decimals of tokens (only needed for displaying token amounts, not needed by the bot)
     let tokenList = tokens.exctractTokens(pools);
@@ -43,11 +56,26 @@ async function main() {
     const safeTokens = SAFE_TOKENS; //await tokens.getSafeTokens(); // Only works on Ethereum mainnet
     logger.info(`Safe token count: ${Object.keys(safeTokens).length}`);
     
+    let paths = []
     // Find paths of length 2,3 starting from each safe token.
     let s = new Date();
-    let paths = generatePaths(safeTokens, pools, 3);
+    for (let token of safeTokens) {
+        let tokenPaths = generatePaths([token], pools, 3);
+        paths = paths.concat(tokenPaths);
+        fs.writeFileSync(`data/paths_${token.substring(0, 6)}.json`, JSON.stringify(tokenPaths)); // Save paths to file using fs
+    }
     let e = new Date();
     logger.info(`Built ${Object.keys(paths).length} paths in ${(e - s) / 1000} seconds`);
+    
+    // Load all paths from files
+    // let pathsFiles = fs.readdirSync('data').filter(fn => fn.startsWith('paths_'));
+    // paths = [];
+    // for (let pathsFile of pathsFiles) {
+    //     // Load paths from file using fs
+    //     let tokenPaths = JSON.parse(fs.readFileSync(`data/${pathsFile}`, 'utf8'));
+    //     paths = paths.concat(tokenPaths);
+    // }
+    // logger.info(`Loaded ${Object.keys(paths).length} paths from files`);
 
     // Filter out pools that are not used in arb paths
     pools = poolsFromPaths(paths);
