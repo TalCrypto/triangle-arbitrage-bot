@@ -185,8 +185,12 @@ function generatePaths(rootTokens, pools, maxHops) {
 
         // Get all pools that involve the input token
         let potentialPools = tokenToPools[tokenIn];
+        if (potentialPools === undefined) {
+            return;
+        }
 
         // Check if the potential pools are already in the path by comparing addresses
+        
         let futurePools = potentialPools.filter(pool => {
             return !path.some(pathPool => {
                 return pathPool.address == pool.address;

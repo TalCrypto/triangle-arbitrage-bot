@@ -185,13 +185,13 @@ async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlo
             toBlock: toBlock,
             topics: eventFilter.topics,
         });
-        console.log(`Found ${events.length} events from ${fromBlock} to ${toBlock}`);
+        // console.log(`Found ${events.length} events from ${fromBlock} to ${toBlock}`);
         events = events.map((event) => {
             return iface.parseLog(event);
         });
         return events;
     } catch (e) {
-        console.log("Too many events, splitting block range in half");
+        // console.log("Too many events, splitting block range in half");
         let midBlock = Math.floor((fromBlock + toBlock) / 2);
 
         let events1 = await getEventsRecursive(provider, eventFilter, iface, fromBlock, midBlock);
