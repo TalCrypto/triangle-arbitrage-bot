@@ -99,4 +99,8 @@ module.exports = {
 
     // coinmarketcap
     SAFE_TOKENS: SAFE_TOKENS,
+
+    // FlashQueryV3
+    FLASH_QUERY_V3_ADDRESS: '0xa5aeC6cF29e66fD47F6a05dcc0c8aCD308d80B4E',
+
 };
