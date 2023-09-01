@@ -14,7 +14,7 @@ const { loadAllPoolsFromV2, loadAllPoolsFromV3, poolsFromPaths } = require('./po
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
-const { getTouchedPoolReserves } = require('./utils');
+const { findUpdatedPools } = require('./utils');
 const { Bundler, Path, Flashloan, ZERO_ADDRESS } = require('./bundler');
 const tokens = require('./tokens');
 const fs = require('fs');
@@ -108,16 +108,23 @@ async function main() {
             let blockNumber = event.blockNumber;
             logger.info(`▪️ New Block #${blockNumber}`);
 
-            let touchedReserves = await getTouchedPoolReserves(provider, blockNumber);
-            let touchedPools = [];
-            for (let address in touchedReserves) {
-                let reserve = touchedReserves[address];
-                if (address in reserves) {
-                    reserves[address] = reserve;
-                    touchedPools.push(address);
-                }
+            try {
+                // Find pools that were potentially updated in the last block
+                s = new Date();
+                let touchedPools = await findUpdatedPools(provider, blockNumber);
+                e = new Date();
+                logger.info(`Found ${touchedPools.length} touched pools in ${(e - s) / 1000} seconds`);
+
+                // Fetch the reserves of all the pools that were potentially updated
+                s = new Date();
+                await batchReserves(HTTPS_URL, pools, touchedPools);
+                e = new Date();
+                logger.info(`Touched pools reserve call took: ${(e - s) / 1000} seconds`);
+            } catch (e) {
+                logger.error(`Error in main loop: ${e}`);
             }
 
+            // The following part will be removed in the following commits.
             let spreads = {};
             for (let idx = 0; idx < Object.keys(paths).length; idx++) {
                 let path = paths[idx];
