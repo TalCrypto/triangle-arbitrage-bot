@@ -22,7 +22,10 @@ const fs = require('fs');
 async function main() {
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
 
-    const factoryAddresses_v2 = ['0xc35DADB65012eC5796536bD9864eD8773aBc74C4']; // Sushi
+    const factoryAddresses_v2 = [
+        '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', // QuickSwap
+        '0xc35DADB65012eC5796536bD9864eD8773aBc74C4', // SushiSwap
+    ];
     const factoryAddresses_v3 = ['0x1F98431c8aD98523631AE4a59f267346ea31F984']; // Uniswap v3
 
     let pools_v2, pools_v3;
@@ -81,8 +84,9 @@ async function main() {
     pools = poolsFromPaths(paths);
     logger.info(`New pool count: ${Object.keys(pools).length}`);
 
+    // Fetch the reserves of all pools
     s = new Date();
-    let reserves = await batchReserves(HTTPS_URL, Object.keys(pools));
+    await batchReserves(HTTPS_URL, pools);
     e = new Date();
     logger.info(`Batch reserves call took: ${(e - s) / 1000} seconds`);
 
