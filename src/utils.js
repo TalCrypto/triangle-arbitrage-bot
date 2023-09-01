@@ -43,35 +43,51 @@ async function estimateNextBlockGas() {
     return estimate;
 }
 
-async function getTouchedPoolReserves(provider, blockNumber) {
-    const syncEventSelector = ethers.utils.id('Sync(uint112,uint112)');
-    const filter = {
-        fromBlock: blockNumber,
-        toBlock: blockNumber,
-        topics: [syncEventSelector],
-    };
+// Find pools that were probably updated in the given block
+async function findUpdatedPools(provider, blockNumber) {
+    // Selectors for events that update reserves in a Uniswap V2/V3 pool
+    const eventSelectors = {
+        V2Sync: ethers.utils.id('Sync(uint112,uint112)'), // [uint112 reserve0, uint112 reserve1]
+        V3Mint: ethers.utils.id('Mint(address,address,int24,int24,uint128,uint256,uint256)'), // [address sender, address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint128 amount0, uint128 amount1]
+        V3Burn: ethers.utils.id('Burn(address,address,int24,int24,uint128,uint256,uint256)'), // [address sender, address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint128 amount0, uint128 amount1]
+        V3Swap: ethers.utils.id('Swap(address,address,int256,int256,uint160,uint128,int24)'), // [address sender, address recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick]
+        V3Collect: ethers.utils.id('Collect(address,int24,int24,uint128,uint128)'), // [address sender, int24 tickLower, int24 tickUpper, uint128 amount0, uint128 amount1]
+        V3Flash: ethers.utils.id('Flash(address,address,uint256,uint256,uint256,uint256)'), // [address sender, address recipient, uint256 amount0, uint256 amount1, uint256 paid0, uint256 paid1]
+    }
 
-    let abiCoder = new ethers.utils.AbiCoder();
-    let logs = await provider.getLogs(filter);
-    let txIdx = {};
-    let reserves = {};
-    for (let log of logs) {
-        let address = log.address;
-        let idx = log.transactionIndex;
-        let prevTxIdx = txIdx[address] || 0;
-        if (idx >= prevTxIdx) {
-            let decoded = abiCoder.decode(
-                ['uint112', 'uint112'], log.data
-            );
-            reserves[address] = [BigInt(decoded[0]), BigInt(decoded[1])];
-            txIdx[address] = idx;
+    const filters = [];
+    for (const [key, value] of Object.entries(eventSelectors)) {
+        filters.push({
+            fromBlock: blockNumber,
+            toBlock: blockNumber,
+            topics: [value],
+        });
+    }
+
+    // Use promise.all to get all logs in parallel for each filter
+    let filterLogs = await Promise.all(filters.map(filter => provider.getLogs(filter)));
+    
+    // Get unique pool addresses from logs
+    let logCount = 0;
+    let poolAddresses = [];
+    for (const logs of filterLogs) {
+        for (const log of logs) {
+            console.log(log);
+            poolAddresses.push(log.address);
+            logCount++;
         }
     }
-    return reserves;
+    console.log(`Found ${logCount} logs in block ${blockNumber}`);
+
+    // Remove duplicates
+    poolAddresses = [...new Set(poolAddresses)];
+    
+    return poolAddresses;
 }
+
 
 module.exports = {
     calculateNextBlockBaseFee,
     estimateNextBlockGas,
-    getTouchedPoolReserves,
+    findUpdatedPools,
 };
