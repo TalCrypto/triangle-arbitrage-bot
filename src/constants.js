@@ -119,6 +119,7 @@ const SAFE_TOKENS = {
 module.exports = {
     // env variables
     HTTPS_URL: process.env.HTTPS_URL,
+    HTTPS2_URL: process.env.HTTPS2_URL,
     WSS_URL: process.env.WSS_URL,
     CHAIN_ID: process.env.CHAIN_ID || 1,
     BLOCKNATIVE_TOKEN: process.env.BLOCKNATIVE_TOKEN,

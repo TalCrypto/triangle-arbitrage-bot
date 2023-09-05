@@ -122,7 +122,7 @@ async function loadAllPoolsFromV2(provider, factoryAddresses) {
                 DexVariant.UniswapV2,
                 token0,
                 token1,
-                {fee: 300});
+                {fee: 30});// In basis points
             pools[event.args[2]] = pool;
         }
     }
@@ -155,7 +155,7 @@ async function loadAllPoolsFromV3(provider, factoryAddresses) {
                 token0,
                 token1,
                 {
-                    fee: event.args[2], // fee
+                    fee: event.args[2]/100, // fee
                     tickSpacing: event.args[3], // tickSpacing
                 });
             pools[event.args[4]] = pool; // pool address
@@ -182,13 +182,11 @@ async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlo
             toBlock: toBlock,
             topics: eventFilter.topics,
         });
-        // console.log(`Found ${events.length} events from ${fromBlock} to ${toBlock}`);
         events = events.map((event) => {
             return iface.parseLog(event);
         });
         return events;
     } catch (e) {
-        // console.log("Too many events, splitting block range in half");
         let midBlock = Math.floor((fromBlock + toBlock) / 2);
 
         let events1 = await getEventsRecursive(provider, eventFilter, iface, fromBlock, midBlock);
@@ -216,6 +214,7 @@ function keepPoolsWithLiquidity(pools) {
 }
 
 // Returns the pools found in the given paths.
+function extractPoolsFromPaths(paths){
     let pools = {};
     for (let path of paths) {
         for (let pool of path.pools) {
@@ -243,5 +242,7 @@ function indexPathsByPools(paths) {
 module.exports = {
     loadAllPoolsFromV2,
     loadAllPoolsFromV3,
-    poolsFromPaths,
+    keepPoolsWithLiquidity,
+    extractPoolsFromPaths,
+    indexPathsByPools,
 };
