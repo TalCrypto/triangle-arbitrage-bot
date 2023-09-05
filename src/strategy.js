@@ -125,12 +125,21 @@ async function main() {
             let blockNumber = event.blockNumber;
             logger.info(`▪️ New Block #${blockNumber}`);
 
-            try {
-                // Find pools that were potentially updated in the last block
-                s = new Date();
-                let touchedPools = await findUpdatedPools(provider, blockNumber);
-                e = new Date();
-                logger.info(`Found ${touchedPools.length} touched pools in ${(e - s) / 1000} seconds`);
+            // Display profit every 30 blocks
+            if (blockNumber % 30 == 0) {
+                let sessionEnd = new Date();
+                let sessionDuration = (sessionEnd - sessionStart) / 1000;
+                logger.info("===== Profit Recap =====")
+                
+                // For each token, display the profit in decimals
+                for (let token in profitStore) {
+                    let profit = Number(profitStore[token]) / 10**safeTokens[token].decimals;
+                    logger.info(`${safeTokens[token].symbol}: ${profit} (${token})`);
+                }
+                logger.info(`Session duration: ${sessionDuration} seconds (${sessionDuration / 60} minutes) (${sessionDuration / 60 / 60} hours)`);
+                logger.info("========================")
+            }
+
 
                 // Fetch the reserves of all the pools that were potentially updated
                 s = new Date();
