@@ -97,13 +97,11 @@ function cacheSyncedPools(pools) {
 
 
 // Use 'getEventsRecursive' to get all the events from a contract.
-async function loadAllPoolsFromV2(httpsUrl, factoryAddresses) {
+async function loadAllPoolsFromV2(provider, factoryAddresses) {
     // let pools = loadCachedPools();
     // if (Object.keys(pools).length > 0) {
     //     return pools;
     // }
-
-    const provider = new ethers.providers.JsonRpcProvider(httpsUrl);
     const toBlock = await provider.getBlockNumber();
 
     pools = {};
@@ -134,8 +132,7 @@ async function loadAllPoolsFromV2(httpsUrl, factoryAddresses) {
 }
 
 // Returns the list of pools created by a v3-compatible factory contract.
-async function loadAllPoolsFromV3(httpsUrl, factoryAddresses) {
-    const provider = new ethers.providers.JsonRpcProvider(httpsUrl);
+async function loadAllPoolsFromV3(provider, factoryAddresses) {
     const toBlock = await provider.getBlockNumber();
 
     pools = {};

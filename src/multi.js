@@ -10,7 +10,7 @@ const {
     logger,
 } = require('./constants');
 
-async function getUniswapV2Reserves(httpsUrl, poolAddresses, pools) {
+async function getUniswapV2Reserves(provider, poolAddresses, pools) {
     // 👉 Example of multicall provided: https://github.com/mds1/multicall/tree/main/examples/typescript
     const v2PairInterface = new ethers.utils.Interface(UniswapV2PairAbi);
     const calls = poolAddresses.map(address => ({
@@ -35,8 +35,7 @@ async function getUniswapV2Reserves(httpsUrl, poolAddresses, pools) {
 
 
 // Use FlashQueryV3 contract to pull liquidity/sqrtPrice from v3 pools.
-async function getUniswapV3Liquidity(httpsUrl, poolAddresses, pools) {
-    const provider = new ethers.providers.JsonRpcProvider(httpsUrl);
+async function getUniswapV3Liquidity(provider, poolAddresses, pools) {
     const flashQuery = new ethers.Contract(FLASH_QUERY_V3_ADDRESS, FlashQueryV3Abi, provider);
     
     logger.info(`Performing V3 multicall for ${poolAddresses.length} pools.`);
@@ -50,11 +49,11 @@ async function getUniswapV3Liquidity(httpsUrl, poolAddresses, pools) {
         pools[poolAddresses[i]].extra.sqrtPriceX96 = BigInt(sqrtPriceList[i]);
         pools[poolAddresses[i]].extra.liquidity = BigInt(liquidityList[i]);
     }
-}   
+}
 
 
 // Fetch reserves for a list of pools. Fetch separately for v2 and v3 pools.
-async function batchReserves(httpsUrl, pools, onlyAddresses= [], batchSize = 200) {
+async function batchReserves(provider, pools, onlyAddresses = [], batchSize = 100, callPerSecond = 0) {
     // Requests must be batched to avoid hitting the max request size, and to get the best performance.
     // onlyAddresses is an optional parameter that can be used to limit the batch to a subset of pools.
 
@@ -75,7 +74,8 @@ async function batchReserves(httpsUrl, pools, onlyAddresses= [], batchSize = 200
     if (v2Addresses.length > 0) {
         const v2Batches = [];
         for (let i = 0; i < v2Addresses.length; i += batchSize) {
-            v2Batches.push(v2Addresses.slice(i, i + batchSize));
+            // Start calling the batches.
+            promises.push(getUniswapV2Reserves(provider, toFetch, pools));
         }
         promises.push(...v2Batches.map(batch => getUniswapV2Reserves(httpsUrl, batch, pools)));
     }
@@ -83,7 +83,9 @@ async function batchReserves(httpsUrl, pools, onlyAddresses= [], batchSize = 200
     if (v3Addresses.length > 0) {
         const v3Batches = [];
         for (let i = 0; i < v3Addresses.length; i += batchSize) {
-            v3Batches.push(v3Addresses.slice(i, i + batchSize));
+
+            // Start calling the batches.
+            promises.push(getUniswapV3Liquidity(provider, toFetch, pools));
         }
         promises.push(...v3Batches.map(batch => getUniswapV3Liquidity(httpsUrl, batch, pools)));
     }
