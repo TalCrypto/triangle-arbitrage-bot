@@ -140,14 +140,33 @@ async function main() {
                 logger.info("========================")
             }
 
+            // Find pools that were updated in the last block
+            s = new Date();
+            let touchedPools = await findUpdatedPools(providerReserves, blockNumber, pools);
+            e = new Date();
+            logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events`);
+            if (touchedPools.length == 0) return; // No pools were updated, no need to continue
 
-                // Fetch the reserves of all the pools that were potentially updated
-                s = new Date();
-                await batchReserves(HTTPS_URL, pools, touchedPools);
-                e = new Date();
-                logger.info(`Touched pools reserve call took: ${(e - s) / 1000} seconds`);
-            } catch (e) {
-                logger.error(`Error in main loop: ${e}`);
+            // Fetch the reserves of all the pools that were updated
+            s = new Date();
+            await batchReserves(provider, pools, touchedPools, 100, 1);
+            e = new Date();
+            logger.info(`${(e - s) / 1000} s - Touched pools reserve call took: `);
+        
+            // Find paths that use the touched pools
+            const MAX_PATH_EVALUATION = 1000; // Share that value between each touched pool
+            let touchedPaths = [];
+            for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
+                if (pool in pathsByPool) {
+                    // Find the new paths, check if they are not already in touchedPaths
+                    let newPaths = pathsByPool[pool].slice(0, Math.floor(MAX_PATH_EVALUATION/touchedPools.length));
+                    newPaths = newPaths.filter(path => !touchedPaths.includes(path));
+                    touchedPaths = touchedPaths.concat(newPaths);
+                }
+            }
+            logger.info(`Found ${touchedPaths.length} touched paths`);
+
+
             }
 
             // The following part will be removed in the following commits.
