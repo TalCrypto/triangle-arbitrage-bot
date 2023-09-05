@@ -65,20 +65,56 @@ const MULTICALL_ABI = [
 ];
 
 // Tokens with more than 10M market cap
-const SAFE_TOKENS = [
-    "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", // USDT
-    "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC  
-    "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", // WETH
-    "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", // DAI
-    "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", // WMATIC
-    "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", // WBTC
-    "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39", // LINK
-    "0x1a13F4Ca1d028320A707D99520AbFefca3998b7F", // amUSDC
-    "0x60D55F02A771d515e077c9C2403a1ef324885CeC", // amUSDT
-    "0x8dF3aad3a84da6b69A4DA8aeC3eA40d9091B2Ac4", // amWMATIC
-    "0x28424507fefb6f7f8E9D3860F56504E4e5f5f390", // amWETH
-    "0xE0B52e49357Fd4DAf2c15e02058DCE6BC0057db4", // agEUR
-];
+const SAFE_TOKENS = {
+    "0xc2132D05D31c914a87C6611C10748AEb04B58e8F": {
+        decimals: 6, 
+        symbol: "USDT",
+    },
+    "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174": {
+        decimals: 6, 
+        symbol: "USDC",
+    },
+    "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619": {
+        decimals: 18, 
+        symbol: "WETH",
+    },
+    "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063": {
+        decimals: 18, 
+        symbol: "DAI",
+    },
+    "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270": {
+        decimals: 18, 
+        symbol: "WMATIC",
+    },
+    "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6": {
+        decimals: 8, 
+        symbol: "WBTC",
+    },
+    "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39": {
+        decimals: 18, 
+        symbol: "LINK",
+    },
+    "0x1a13F4Ca1d028320A707D99520AbFefca3998b7F": {
+        decimals: 6, 
+        symbol: "amUSDC",
+    },
+    "0x60D55F02A771d515e077c9C2403a1ef324885CeC": {
+        decimals: 6, 
+        symbol: "amUSDT",
+    },
+    "0x8dF3aad3a84da6b69A4DA8aeC3eA40d9091B2Ac4": {
+        decimals: 18, 
+        symbol: "amWMATIC",
+    },
+    "0x28424507fefb6f7f8E9D3860F56504E4e5f5f390": {
+        decimals: 18, 
+        symbol: "amWETH",
+    },
+    "0xE0B52e49357Fd4DAf2c15e02058DCE6BC0057db4": {
+        decimals: 18, 
+        symbol: "agEUR",
+    },
+};
 
 module.exports = {
     // env variables
