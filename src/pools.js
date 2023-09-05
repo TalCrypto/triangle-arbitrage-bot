@@ -225,6 +225,21 @@ function keepPoolsWithLiquidity(pools) {
     return pools;
 }
 
+// Index the paths by the pools involved.
+function indexPathsByPools(paths) {
+    let pathsByPools = {};
+    for (let path of paths) {
+        for (let pool of path.pools) {
+            if (!(pool.address in pathsByPools)) {
+                pathsByPools[pool.address] = [];
+            }
+            pathsByPools[pool.address].push(path);
+        }
+    }
+
+    return pathsByPools;
+}
+
 module.exports = {
     loadAllPoolsFromV2,
     loadAllPoolsFromV3,
