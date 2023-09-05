@@ -167,6 +167,24 @@ async function main() {
             logger.info(`Found ${touchedPaths.length} touched paths`);
 
 
+            // For each path, compute the optimal amountIn to trade, and the profit
+            s = new Date();
+            let profitablePaths = [];
+            for (let path of touchedPaths) {
+                let amountIn = optimizeAmountIn(path);
+                if (amountIn === 0n) continue; // Grossly unprofitable
+
+                let profit = computeProfit(amountIn, path);
+
+                // Store the profit and amountIn values
+                path.amountIn = amountIn;
+                path.profit = profit;
+                
+                if (profit > 0n) {
+                    profitablePaths.push(path);
+                } else {
+                    // Unprofitable
+                }
             }
 
             // The following part will be removed in the following commits.
