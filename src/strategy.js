@@ -186,24 +186,34 @@ async function main() {
                     // Unprofitable
                 }
             }
+            e = new Date();
+            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths`);
 
-            // The following part will be removed in the following commits.
-            let spreads = {};
-            for (let idx = 0; idx < Object.keys(paths).length; idx++) {
-                let path = paths[idx];
-                let touchedPath = touchedPools.reduce((touched, pool) => {
-                    return touched + (path.hasPool(pool) ? 1 : 0)
-                }, 0);
-                if (touchedPath > 0) {
-                    let priceQuote = path.simulateV2Path(1, reserves);
-                    let spread = (priceQuote / (10 ** usdcDecimals) - 1) * 100;
-                    if (spread > 0) {
-                        spreads[idx] = spread;
+
+            // Display the profitable paths
+            profitablePaths.sort((a, b) => Number(b.profit) - Number(a.profit));
+            for (let path of profitablePaths.slice(0, 1)) {
+                logger.info(`Most profitable path: ${Number(path.profit)/10**SAFE_TOKENS[path.rootToken].decimals} ${SAFE_TOKENS[path.rootToken].symbol} (${path.amountIn} wei)`);
+
+                // Store profit in profitStore
+                profitStore[path.rootToken] += path.profit;
+                
+                // Display info about the path
+                let amountOut = path.amountIn;
+                for (let i = 0; i < path.pools.length; i++) {
+                    let pool = path.pools[i];
+                    let zfo = path.directions[i];
+                    let amountIn = amountOut;
+                    amountOut = exactTokensOut(amountOut, pool, zfo);
+
+                    if (pool.version == 2) {
+                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} in:${amountIn} out:${amountOut} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
+                    } else if (pool.version == 3) {
+                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} in:${amountIn} out:${amountOut} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
                     }
                 }
+                logger.info("===");
             }
-
-            console.log('▶️ Spread over 0%: ', spreads);
         }
     });
 }
