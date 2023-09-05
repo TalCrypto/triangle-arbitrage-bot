@@ -229,24 +229,32 @@ function generatePaths(rootTokens, pools, maxHops) {
         pathCount = finalPaths.length;
     }
 
-    // Add the zeroForOne array to the final path objects
+    // Add the zfoList array to the final path objects
     for (let path of finalPaths) {
-        let zeroForOne = [];
+        let zfoList = [];
 
         // Set the first zfo with respect to the root token
-        zeroForOne.push(path.pools[0].token0 == path.rootToken);
-        let inToken = zeroForOne[0] ? path.pools[0].token0 : path.pools[0].token1;
+        zfoList.push(path.pools[0].token0 === path.rootToken);
+        let outToken = zfoList[0] ? path.pools[0].token1 : path.pools[0].token0;
 
         // Set the rest of the zfo with respect to the previous pool
         for (let i = 1; i < path.pools.length; i++) {
-            zeroForOne.push(path.pools[i].token0 == inToken);
-            inToken = zeroForOne[i] ? path.pools[i].token0 : path.pools[i].token1;
+            zfoList.push(path.pools[i].token0 == outToken);
+            outToken = zfoList[i] ? path.pools[i].token1 : path.pools[i].token0;
         }
 
-        path.directions = zeroForOne;
+        path.directions = zfoList;
     }
 
-    return finalPaths;
+    /*
+    [{
+        pools: [pool1, pool2, pool3],
+        rootToken: token1,
+        directions: [true, false, true],
+    }, ...]
+    */
+
+    return finalPaths; 
 }
 
 
