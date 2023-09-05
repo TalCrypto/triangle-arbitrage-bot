@@ -20,6 +20,7 @@ const tokens = require('./tokens');
 const fs = require('fs');
 
 async function main() {
+    logger.info("Program started");
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
 
     const factoryAddresses_v2 = [

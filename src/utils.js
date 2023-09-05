@@ -4,6 +4,7 @@ const axios = require('axios');
 const { 
     BLOCKNATIVE_TOKEN,
     CHAIN_ID,
+    logger,
 } = require('./constants');
 
 const calculateNextBlockBaseFee = (block) => {
@@ -77,11 +78,13 @@ async function findUpdatedPools(provider, blockNumber) {
             logCount++;
         }
     }
-    console.log(`Found ${logCount} logs in block ${blockNumber}`);
+    logger.info(`Found ${logCount} DEX (V2, V3) logs in block ${blockNumber}`);
 
-    // Remove duplicates
-    poolAddresses = [...new Set(poolAddresses)];
-    
+    // Ignore potential pools that are not already known (in the pools object).
+    poolAddresses = [...new Set(poolAddresses)]; // Remove duplicates
+    poolAddresses = poolAddresses.filter(poolAddress => pools[poolAddress]);
+    logger.info(`Found ${poolAddresses.length} pools in block ${blockNumber}`);
+
     return poolAddresses;
 }
 

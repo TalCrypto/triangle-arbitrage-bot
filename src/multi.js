@@ -7,6 +7,7 @@ const {
     MULTICALL_ADDRESS,
     MULTICALL_ABI,
     FLASH_QUERY_V3_ADDRESS,
+    logger,
 } = require('./constants');
 
 async function getUniswapV2Reserves(httpsUrl, poolAddresses, pools) {
@@ -17,8 +18,8 @@ async function getUniswapV2Reserves(httpsUrl, poolAddresses, pools) {
         allowFailure: true,
         callData: v2PairInterface.encodeFunctionData('getReserves', []),  // 0x0902f1ac
     }));
-
-    const provider = new ethers.providers.JsonRpcProvider(httpsUrl);
+    
+    logger.info(`Performing V2 multicall for ${poolAddresses.length} pools.`);
     const multicall = new ethers.Contract(MULTICALL_ADDRESS, MULTICALL_ABI, provider);
     const result = await multicall.callStatic.aggregate3(calls);
 
@@ -37,6 +38,8 @@ async function getUniswapV2Reserves(httpsUrl, poolAddresses, pools) {
 async function getUniswapV3Liquidity(httpsUrl, poolAddresses, pools) {
     const provider = new ethers.providers.JsonRpcProvider(httpsUrl);
     const flashQuery = new ethers.Contract(FLASH_QUERY_V3_ADDRESS, FlashQueryV3Abi, provider);
+    
+    logger.info(`Performing V3 multicall for ${poolAddresses.length} pools.`);
     const result = await flashQuery.callStatic.getLiquidityV3(poolAddresses);
 
     // Result is two arrays, one for sqrtPrice and one for liquidity.
@@ -65,6 +68,7 @@ async function batchReserves(httpsUrl, pools, onlyAddresses= [], batchSize = 200
         v2Addresses = Object.keys(pools).filter(address => pools[address].version === 2);
         v3Addresses = Object.keys(pools).filter(address => pools[address].version === 3);
     }
+    logger.info(`Fetching reserves for ${v2Addresses.length} v2 pools and ${v3Addresses.length} v3 pools.`);
     const promises = [];
 
     // Build batches of addresses and return promises for each batch.

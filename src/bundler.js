@@ -71,7 +71,7 @@ class Bundler {
             console.warn(`Simulation Error: ${simulation.error.message}`)
             return '';
         } else {
-            console.log(`Simulation Success: ${JSON.stringify(simulation, null, 2)}`)
+            logger.info(`Simulation Success: ${JSON.stringify(simulation, null, 2)}`)
         }
 
         const bundleSubmission = await this.flashbots.sendRawBundle(signedTransactions, targetBlock, { replacementUuid });

@@ -1,3 +1,5 @@
+const { logger } = require('./constants');
+
 class UniswapV2Simulator {
     constructor() {}
 

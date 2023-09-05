@@ -63,8 +63,7 @@ async function getSafeTokens(){
 
         return safeTokens;
     } catch (err) {
-        logger.error("Failed to fetch safe tokens from Coinmarketcap. Returning default tokens");
-        console.log(err);
+        logger.error("Failed to fetch safe tokens from Coinmarketcap. Returning default tokens. Error: ", err.message);
         return constants.SAFE_TOKENS;
     }
         

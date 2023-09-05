@@ -17,13 +17,26 @@ const logFormat = printf(({ level, message, timestamp }) => {
     return `${timestamp} [${level.toUpperCase()}] ${message}`;
 });
 
+// Count the number of '.log' files in /data
+const fs = require('fs');
+const logDir = 'data';
+let logFileCount = 0;
+fs.readdirSync(logDir).forEach(file => {
+    if (file.endsWith('.log')) {
+        logFileCount++;
+    }
+});
+
 const logger = createLogger({
     format: combine(
         timestamp(),
         logFormat,
         colorize({ all: true }),
     ),
-    transports: [new transports.Console()],
+    transports: [
+        new transports.Console(),
+        new transports.File({ filename: 'data/' + logFileCount + '.log' }),
+    ],
 });
 
 const blacklistTokens = ['0x9469603F3Efbcf17e4A5868d81C701BDbD222555'];
