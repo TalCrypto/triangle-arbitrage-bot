@@ -56,9 +56,11 @@ async function getUniswapV3Liquidity(provider, poolAddresses, pools) {
 async function batchReserves(provider, pools, onlyAddresses = [], batchSize = 100, callPerSecond = 0) {
     // Requests must be batched to avoid hitting the max request size, and to get the best performance.
     // onlyAddresses is an optional parameter that can be used to limit the batch to a subset of pools.
-
+    // callPerSecond is the max number of eth_call requests to make per second. 0 means no limit.
     let v2Addresses
     let v3Addresses
+    let cpsCounter = 0; // Counter for callPerSecond.
+
     if (onlyAddresses.length > 0) {
         // Addresses in onlyAddresses may not be in the pools object, care must be taken.
         v2Addresses = onlyAddresses.filter(address => pools[address] && pools[address].version === 2);
@@ -72,26 +74,37 @@ async function batchReserves(provider, pools, onlyAddresses = [], batchSize = 10
 
     // Build batches of addresses and return promises for each batch.
     if (v2Addresses.length > 0) {
-        const v2Batches = [];
         for (let i = 0; i < v2Addresses.length; i += batchSize) {
+            let toFetch = v2Addresses.slice(i, i + batchSize);
+            
             // Start calling the batches.
             promises.push(getUniswapV2Reserves(provider, toFetch, pools));
+            cpsCounter++;
+            if (callPerSecond > 0 && cpsCounter >= callPerSecond) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                cpsCounter = 0;
+            }
         }
-        promises.push(...v2Batches.map(batch => getUniswapV2Reserves(httpsUrl, batch, pools)));
     }
 
     if (v3Addresses.length > 0) {
         const v3Batches = [];
         for (let i = 0; i < v3Addresses.length; i += batchSize) {
+            // v3Batches.push(v3Addresses.slice(i, i + batchSize));
+            let toFetch = v3Addresses.slice(i, i + batchSize);
 
             // Start calling the batches.
             promises.push(getUniswapV3Liquidity(provider, toFetch, pools));
+            cpsCounter++;
+            if (callPerSecond > 0 && cpsCounter >= callPerSecond) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                cpsCounter = 0;
+            }
         }
-        promises.push(...v3Batches.map(batch => getUniswapV3Liquidity(httpsUrl, batch, pools)));
     }
 
-    // Resolve all promises at once.
-    const results = await Promise.all(promises);
+    // Wait for all promises to resolve.
+    await Promise.all(promises);
 }
 
 
