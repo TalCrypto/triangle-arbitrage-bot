@@ -150,7 +150,65 @@ function exactTokensOut(amountIn, pool, zfo) {
 }
 
 
+// Compute the profit of an arbitrage path given an input amount.
+function computeProfit(amountIn, path) {
+
+    let amountOut = amountIn;
+    for (let i = 0; i < path.pools.length; i++) {
+        let pool = path.pools[i];
+        let zfo = path.directions[i];
+        amountOut = exactTokensOut(amountOut, pool, zfo);
+    }
+    return amountOut - amountIn;
+}
+
+
+// Find the optimal input amount for an arbitrage path.
+function optimizeAmountIn(path) {
+    // To find the local maximum, we calculate the derivative of the profit function at the middle point of the interval. Assume the profit function is convex.
+    let min = BigInt(1000);
+    let max = BigInt(10 ** 30); // = 2**100
+    let stepsMax = 100;
+
+    // Use whichever is larger.
+    let alpha = 1e-6; // relative step size
+    let beta = 100; // absolute step size
+
+    // Test, needs improvement.
+    function h(x) {
+        return BigInt(Math.floor(Math.max(alpha * Number(x), beta)));
+    }
+
+    // Compute the profit and the derivative at the minimum.
+    let minProfit = computeProfit(min, path);
+    let minDerivative = computeProfit(min + h(min), path) - minProfit;
+
+    if (minDerivative < 0n) {
+        // If the profit is negative and the derivative is negative, the maximum is at the minimum.
+        return min;
+    } 
+
+    // When the derivative at middle point is positive, we know the maximum is in the interval [mid, max]. The same applies to the reverse direction.
+    let mid;
+    let midDerivative;
+    for (let i = 0; i < stepsMax; i++) {
+        mid = (min + max) / BigInt(2);
+        midProfit = computeProfit(mid, path);
+        midDerivative = computeProfit(mid + h(mid), path) - midProfit;
+
+        if (midDerivative > 0) {
+            min = mid;
+        } else {
+            max = mid;
+        }
+    }
+
+    return mid;
+}
 
 module.exports = {
     UniswapV2Simulator,
+    exactTokensOut,
+    computeProfit,
+    optimizeAmountIn,
 };
