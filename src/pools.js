@@ -197,8 +197,25 @@ async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlo
     }
 }
 
-// Returns a list containing the pools found in the given paths.
-function poolsFromPaths(paths){
+// Returns only the pools that have some liquidity.
+function keepPoolsWithLiquidity(pools) {
+    let poolsWithLiquidity = {};
+    for (let address in pools) {
+        let pool = pools[address];
+        if (pool.version == DexVariant.UniswapV2) {
+            if (pool.extra.reserve0 > 0 && pool.extra.reserve1 > 0) {
+                poolsWithLiquidity[address] = pool;
+            }
+        } else if (pool.version == DexVariant.UniswapV3) {
+            if (pool.extra.liquidity > 0) {
+                poolsWithLiquidity[address] = pool;
+            }
+        }
+    }
+    return poolsWithLiquidity;
+}
+
+// Returns the pools found in the given paths.
     let pools = {};
     for (let path of paths) {
         for (let pool of path.pools) {
