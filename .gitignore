@@ -2,6 +2,10 @@
 *.csv
 *.txt
 data
+*.zip
+*.png
+lib
+cache
 
 # Logs
 logs
