@@ -6,7 +6,7 @@ require('dotenv').config();
 const colors = {
     error: 'red',
     warn: 'yellow',
-    info: 'black',
+    info: 'white',
     http: 'magenta',
     debug: 'blue',
 };

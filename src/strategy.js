@@ -116,14 +116,22 @@ async function main() {
         BOT_ADDRESS,
     );
     await bundler.setup();
-    
+
+    // DEBUG
+    const dataStore = {
+        events: [], // Store the time in ms to read the events of blocks
+        reserves: [], // Store the time in ms it took to read the reserves of pools
+        block: [], // Store the total time in ms it took to process a block
+    };
+        
     // Start listening to new blocks using websockets (TODO: measure latency)
     let eventEmitter = new EventEmitter();
     streamNewBlocks(WSS_URL, eventEmitter);
     eventEmitter.on('event', async (event) => {
         if (event.type == 'block') {
             let blockNumber = event.blockNumber;
-            logger.info(`▪️ New Block #${blockNumber}`);
+            logger.info(`=== New Block #${blockNumber}`);
+            sblock = new Date();
 
             // Display profit every 30 blocks
             if (blockNumber % 30 == 0) {
@@ -138,21 +146,43 @@ async function main() {
                 }
                 logger.info(`Session duration: ${sessionDuration} seconds (${sessionDuration / 60} minutes) (${sessionDuration / 60 / 60} hours)`);
                 logger.info("========================")
+
+
+                // DEBUG
+                // Print time decile values: events, reserves, block
+                dataStore.events.sort((a, b) => a - b);
+                dataStore.reserves.sort((a, b) => a - b);
+                dataStore.block.sort((a, b) => a - b);
+                let eventDeciles = [];
+                let reserveDeciles = [];
+                let blockDeciles = [];
+                for (let i = 0; i < 10; i++) {
+                    eventDeciles.push(dataStore.events[Math.floor(i * dataStore.events.length / 10)]);
+                    reserveDeciles.push(dataStore.reserves[Math.floor(i * dataStore.reserves.length / 10)]);
+                    blockDeciles.push(dataStore.block[Math.floor(i * dataStore.block.length / 10)]);
+                }
+                logger.info("///// Time Stats /////")
+                logger.info(`Event deciles: ${eventDeciles}`);
+                logger.info(`Reserve deciles: ${reserveDeciles}`);
+                logger.info(`Block deciles: ${blockDeciles}`);
+                logger.info("//////////////////////")
             }
 
             // Find pools that were updated in the last block
             s = new Date();
-            let touchedPools = await findUpdatedPools(providerReserves, blockNumber, pools);
+            let touchedPools = await findUpdatedPools(provider, blockNumber, pools);
             e = new Date();
-            logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events`);
+            dataStore.events.push(e - s);
+            logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
             if (touchedPools.length == 0) return; // No pools were updated, no need to continue
 
-            // Fetch the reserves of all the pools that were updated
-            s = new Date();
-            await batchReserves(provider, pools, touchedPools, 100, 1);
-            e = new Date();
-            logger.info(`${(e - s) / 1000} s - Touched pools reserve call took: `);
-        
+            // // Fetch the reserves of all the pools that were updated
+            // s = new Date();
+            // await batchReserves(provider, pools, touchedPools, 1000, 2, blockNumber);
+            // e = new Date();
+            // dataStore.reserves.push(e - s);
+            // logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
+
             // Find paths that use the touched pools
             const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
             let touchedPaths = [];
@@ -206,13 +236,13 @@ async function main() {
                 }
             }
             e = new Date();
-            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths`);
+            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
 
 
             // Display the profitable paths
             profitablePaths.sort((a, b) => Number(b.profit) - Number(a.profit));
             for (let path of profitablePaths.slice(0, 1)) {
-                logger.info(`Most profitable path: ${Number(path.profit)/10**SAFE_TOKENS[path.rootToken].decimals} ${SAFE_TOKENS[path.rootToken].symbol} (${path.amountIn} wei)`);
+                logger.info(`Most profitable path: ${Number(path.profit)/10**SAFE_TOKENS[path.rootToken].decimals} ${SAFE_TOKENS[path.rootToken].symbol} (${path.amountIn} wei) block #${blockNumber}`);
 
                 // Store profit in profitStore
                 profitStore[path.rootToken] += path.profit;
@@ -231,8 +261,9 @@ async function main() {
                         logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} in:${amountIn} out:${amountOut} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
                     }
                 }
-                logger.info("===");
             }
+            dataStore.block.push(new Date() - sblock);
+            logger.info(`=== End of block #${blockNumber} (took ${(new Date() - sblock) / 1000} s)`);
         }
     });
 }

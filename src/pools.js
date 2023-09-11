@@ -114,11 +114,11 @@ async function loadAllPoolsFromV2(provider, factoryAddresses) {
         const events = await getEventsRecursive(provider, eventFilter, iface, 0, toBlock);
         
         for (let event of events) {
-            let token0 = event.args[0];
+            let token0 = event.args[0]; // token address
             let token1 = event.args[1];
 
             // Do not use decimals for now
-            let pool = new Pool(event.args[2],
+            let pool = new Pool(event.args[2], // pool address
                 DexVariant.UniswapV2,
                 token0,
                 token1,
