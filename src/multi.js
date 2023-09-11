@@ -10,7 +10,7 @@ const {
     logger,
 } = require('./constants');
 
-async function getUniswapV2Reserves(provider, poolAddresses, pools) {
+async function getUniswapV2Reserves(provider, poolAddresses, pools, blockNumber) {
     // 👉 Example of multicall provided: https://github.com/mds1/multicall/tree/main/examples/typescript
     const v2PairInterface = new ethers.utils.Interface(UniswapV2PairAbi);
     const calls = poolAddresses.map(address => ({
@@ -21,7 +21,7 @@ async function getUniswapV2Reserves(provider, poolAddresses, pools) {
     
     logger.info(`Performing V2 multicall for ${poolAddresses.length} pools.`);
     const multicall = new ethers.Contract(MULTICALL_ADDRESS, MULTICALL_ABI, provider);
-    const result = await multicall.callStatic.aggregate3(calls);
+    const result = await multicall.callStatic.aggregate3(calls, { blockTag: blockNumber });
 
     for (let i = 0; i < result.length; i++) {
         let response = result[i];
@@ -29,17 +29,18 @@ async function getUniswapV2Reserves(provider, poolAddresses, pools) {
             let decoded = v2PairInterface.decodeFunctionResult('getReserves', response.returnData);
             pools[poolAddresses[i]].extra.reserve0 = BigInt(decoded[0]);
             pools[poolAddresses[i]].extra.reserve1 = BigInt(decoded[1]);
+            pools[poolAddresses[i]].extra.liquidity = pools[poolAddresses[i]].extra.reserve0 * pools[poolAddresses[i]].extra.reserve1;
         }
     }
 }
 
 
 // Use FlashQueryV3 contract to pull liquidity/sqrtPrice from v3 pools.
-async function getUniswapV3Liquidity(provider, poolAddresses, pools) {
+async function getUniswapV3Liquidity(provider, poolAddresses, pools, blockNumber) {
     const flashQuery = new ethers.Contract(FLASH_QUERY_V3_ADDRESS, FlashQueryV3Abi, provider);
     
     logger.info(`Performing V3 multicall for ${poolAddresses.length} pools.`);
-    const result = await flashQuery.callStatic.getLiquidityV3(poolAddresses);
+    const result = await flashQuery.callStatic.getLiquidityV3(poolAddresses, { blockTag: blockNumber });
 
     // Result is two arrays, one for sqrtPrice and one for liquidity.
     let sqrtPriceList = result[0];
@@ -53,7 +54,7 @@ async function getUniswapV3Liquidity(provider, poolAddresses, pools) {
 
 
 // Fetch reserves for a list of pools. Fetch separately for v2 and v3 pools.
-async function batchReserves(provider, pools, onlyAddresses = [], batchSize = 100, callPerSecond = 0) {
+async function batchReserves(provider, pools, onlyAddresses = [], batchSize = 100, callPerSecond = 0, blockNumber) {
     // Requests must be batched to avoid hitting the max request size, and to get the best performance.
     // onlyAddresses is an optional parameter that can be used to limit the batch to a subset of pools.
     // callPerSecond is the max number of eth_call requests to make per second. 0 means no limit.
@@ -78,7 +79,7 @@ async function batchReserves(provider, pools, onlyAddresses = [], batchSize = 10
             let toFetch = v2Addresses.slice(i, i + batchSize);
             
             // Start calling the batches.
-            promises.push(getUniswapV2Reserves(provider, toFetch, pools));
+            promises.push(getUniswapV2Reserves(provider, toFetch, pools, blockNumber));
             cpsCounter++;
             if (callPerSecond > 0 && cpsCounter >= callPerSecond) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
@@ -94,7 +95,7 @@ async function batchReserves(provider, pools, onlyAddresses = [], batchSize = 10
             let toFetch = v3Addresses.slice(i, i + batchSize);
 
             // Start calling the batches.
-            promises.push(getUniswapV3Liquidity(provider, toFetch, pools));
+            promises.push(getUniswapV3Liquidity(provider, toFetch, pools, blockNumber));
             cpsCounter++;
             if (callPerSecond > 0 && cpsCounter >= callPerSecond) {
                 await new Promise(resolve => setTimeout(resolve, 1000));

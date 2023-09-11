@@ -55,7 +55,8 @@ async function main() {
 
     // Fetch the reserves of all pools
     let s = new Date();
-    await batchReserves(providerReserves, pools, [], 1000, 5);
+    let blockNumber = await provider.getBlockNumber();
+    await batchReserves(provider, pools, [], 500, 5, blockNumber);
     let e = new Date();
     logger.info(`Batch reserves call took: ${(e - s) / 1000} seconds`);
 
