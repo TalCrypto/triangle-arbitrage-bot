@@ -226,6 +226,7 @@ function extractPoolsFromPaths(paths){
 
 // Index the paths by the pools involved.
 function indexPathsByPools(paths) {
+    // Store the paths by pool address
     let pathsByPools = {};
     for (let path of paths) {
         for (let pool of path.pools) {
@@ -236,7 +237,51 @@ function indexPathsByPools(paths) {
         }
     }
 
+    // Shuffle the paths for each pool
+    for (let poolAddress in pathsByPools) {
+        let pathArray = pathsByPools[poolAddress];
+
+        // Shuffle the paths
+        for (let i = pathArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pathArray[i], pathArray[j]] = [pathArray[j], pathArray[i]];
+        }
+    }
+
     return pathsByPools;
+}
+
+// Heuristic to pre-select the paths to evaluate
+function preSelectPaths(pathArray, nPaths, alpha){
+    // pathArray: array of paths to pre-select from
+    // nPaths: number of paths to pre-select
+    // alpha: fraction of paths to pre-select by liquidity or by random selection
+    let paths = [];
+    let pathArrayCopy = pathArray.slice();
+
+    // pathArrayCopy is already shuffled. Add the required random paths
+    let nRandomPaths = Math.floor((1 - alpha) * nPaths);
+    paths = paths.concat(pathArrayCopy.slice(0, nRandomPaths));
+
+    // Compute liquidity product for each path
+    pathArrayCopy = pathArrayCopy.slice(nRandomPaths);
+    for (let path of pathArrayCopy) {
+        let prod = 1n;
+        for (let pool of path.pools) {
+            prod *= pool.extra.liquidity;
+        }
+        path.liquidityProduct = prod;
+    }
+
+    // Sort paths by liquidity product
+    sortedPath = pathArrayCopy.sort((a, b) => (a.liquidityProduct > b.liquidityProduct) ? -1 : 1);
+    sortedPath.sort((a, b) => (a.liquidityProduct > b.liquidityProduct) ? -1 : 1);
+
+    // Add the top alpha fraction of paths by liquidity
+    let nLiquidityPaths = Math.floor(alpha * nPaths);
+    paths = paths.concat(sortedPath.slice(0, nLiquidityPaths));
+
+    return paths;
 }
 
 module.exports = {
@@ -245,4 +290,5 @@ module.exports = {
     keepPoolsWithLiquidity,
     extractPoolsFromPaths,
     indexPathsByPools,
+    preSelectPaths,
 };

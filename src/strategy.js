@@ -11,7 +11,7 @@ const {
     SAFE_TOKENS,
 } = require('./constants');
 const { logger, blacklistTokens } = require('./constants');
-const { loadAllPoolsFromV2, loadAllPoolsFromV3, keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools } = require('./pools');
+const { loadAllPoolsFromV2, loadAllPoolsFromV3, keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSelectPaths } = require('./pools');
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
@@ -154,17 +154,36 @@ async function main() {
             logger.info(`${(e - s) / 1000} s - Touched pools reserve call took: `);
         
             // Find paths that use the touched pools
-            const MAX_PATH_EVALUATION = 1000; // Share that value between each touched pool
+            const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
             let touchedPaths = [];
             for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
                 if (pool in pathsByPool) {
                     // Find the new paths, check if they are not already in touchedPaths
-                    let newPaths = pathsByPool[pool].slice(0, Math.floor(MAX_PATH_EVALUATION/touchedPools.length));
+                    let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION/touchedPools.length, 0.5);
+                    
+                    // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
                     newPaths = newPaths.filter(path => !touchedPaths.includes(path));
                     touchedPaths = touchedPaths.concat(newPaths);
                 }
             }
-            logger.info(`Found ${touchedPaths.length} touched paths`);
+            logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
+
+
+            // DEBUG
+            // Update the reserves of every pool involved in a touched path
+            let involvedPoolsSet = new Set();
+            for (let path of touchedPaths) {
+                for (let pool of path.pools) {
+                    involvedPoolsSet.add(pool.address);
+                }
+            }
+            let involvedPoolsList = Array.from(involvedPoolsSet);
+            logger.info(`Fetching reserves for ${involvedPoolsList.length} involved pools. Block #${blockNumber}`);
+            s = new Date();
+            await batchReserves(providerReserves, pools, involvedPoolsList, 1000, 2, blockNumber);
+            e = new Date();
+            dataStore.reserves.push(e - s);
+            logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
 
 
             // For each path, compute the optimal amountIn to trade, and the profit
