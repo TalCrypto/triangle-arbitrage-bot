@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8;
 
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+// import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 interface IUniswapV2Pair {
   function token0() external view returns (address);
@@ -33,6 +33,10 @@ interface IUniswapV3Pool{
         uint160 sqrtPriceLimitX96,
         bytes calldata data
     ) external;
+}
+
+interface IERC20 {
+    function transfer(address recipient, uint256 amount) external returns (bool);
 }
 
 interface IWETH is IERC20 {
