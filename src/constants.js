@@ -125,11 +125,11 @@ module.exports = {
     BLOCKNATIVE_TOKEN: process.env.BLOCKNATIVE_TOKEN,
     PRIVATE_KEY: process.env.PRIVATE_KEY,
     SIGNING_KEY: process.env.SIGNING_KEY,
-    BOT_ADDRESS: process.env.BOT_ADDRESS,
+    TRADE_CONTRACT_ADDRESS: process.env.TRADE_CONTRACT_ADDRESS,
     COINMARKETCAP_API_KEY: process.env.COINMARKETCAP_API_KEY,
 
     // abi
-    BOT_ABI: require('../abi/V2ArbBot.json'),
+    TRADE_CONTRACT_ABI: require('../abi/TradeContract.json'),
 
     // logging
     logger,

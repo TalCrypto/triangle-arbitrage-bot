@@ -6,8 +6,8 @@ const {
     HTTPS2_URL,
     WSS_URL,
     PRIVATE_KEY,
-    SIGNING_KEY,
-    BOT_ADDRESS,
+    TRADE_CONTRACT_ABI,
+    TRADE_CONTRACT_ADDRESS,
     SAFE_TOKENS,
 } = require('./constants');
 const { logger, blacklistTokens } = require('./constants');
@@ -17,7 +17,6 @@ const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { findUpdatedPools } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
-const { Bundler, Path, Flashloan, ZERO_ADDRESS } = require('./bundler');
 const tokens = require('./tokens');
 const fs = require('fs');
 
@@ -56,7 +55,7 @@ async function main() {
     // Fetch the reserves of all pools
     let s = new Date();
     let blockNumber = await provider.getBlockNumber();
-    await batchReserves(provider, pools, [], 500, 5, blockNumber);
+    await batchReserves(provider, pools, [], 100, 10, blockNumber);
     let e = new Date();
     logger.info(`Batch reserves call took: ${(e - s) / 1000} seconds`);
 
@@ -108,15 +107,6 @@ async function main() {
     // Start session timer, display profit every 30 blocks
     let sessionStart = new Date();
     
-    // Transaction handler (can send transactions to mempool / bundles to Flashbots)
-    let bundler = new Bundler(
-        PRIVATE_KEY,
-        SIGNING_KEY,
-        HTTPS_URL,
-        BOT_ADDRESS,
-    );
-    await bundler.setup();
-
     // DEBUG
     const dataStore = {
         events: [], // Store the time in ms to read the events of blocks
@@ -175,13 +165,6 @@ async function main() {
             dataStore.events.push(e - s);
             logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
             if (touchedPools.length == 0) return; // No pools were updated, no need to continue
-
-            // // Fetch the reserves of all the pools that were updated
-            // s = new Date();
-            // await batchReserves(provider, pools, touchedPools, 1000, 2, blockNumber);
-            // e = new Date();
-            // dataStore.reserves.push(e - s);
-            // logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
 
             // Find paths that use the touched pools
             const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
@@ -248,12 +231,13 @@ async function main() {
                 profitStore[path.rootToken] += path.profit;
                 
                 // Display info about the path
-                let amountOut = path.amountIn;
+                let amountArray = [path.amountIn];
                 for (let i = 0; i < path.pools.length; i++) {
                     let pool = path.pools[i];
                     let zfo = path.directions[i];
-                    let amountIn = amountOut;
-                    amountOut = exactTokensOut(amountOut, pool, zfo);
+                    let amountIn = amountArray[i];
+                    let amountOut = exactTokensOut(amountIn, pool, zfo);
+                    amountArray.push(amountOut);
 
                     if (pool.version == 2) {
                         logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} in:${amountIn} out:${amountOut} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
@@ -261,9 +245,66 @@ async function main() {
                         logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} in:${amountIn} out:${amountOut} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
                     }
                 }
+
+                // If the time elapsed after the block is < 1s, send an arbitrage transaction to TradeContract.sol
+                let elapsed = new Date() - sblock;
+                if (elapsed < 1000) {
+                    // Send arbitrage transaction
+                    logger.info("Sending arbitrage transaction...");
+                    
+                    // Create a signer
+                    const signer = new ethers.Wallet(PRIVATE_KEY);
+                    const account = signer.connect(provider);
+                    const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
+
+                    // Token amounts involved
+                    let amount0 = amountArray[0];
+                    let amount1 = amountArray[1];
+                    let amount2 = amountArray[2];
+                    let amount3 = amountArray[3];
+
+                    // zeroForOne parameter, for each pool
+                    let zfo0 = path.directions[0];
+                    let zfo1 = path.directions[1];
+                    let zfo2 = path.directions[2];
+
+                    // Set up the callback data for each step of the arbitrage path. Start from the last step.
+                    let data3 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 0, ethers.utils.hexlify([]) ],
+                        token2, amount2); // Repay pool2
+
+                    let data2 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 2,
+                        ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                            [pool2, amount3, TRADE_CONTRACT_ADDRESS, zfo2, data3] )], // Call pool2
+                        token1, amount1); // Repay pool1
+
+                    // In the callback of pool0, call pool1 and repay amount0 to pool0
+                    let data1 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 2,
+                        ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                            [pool1, amount2, TRADE_CONTRACT_ADDRESS, zfo1, data2] )], // Call pool1
+                        token0, amount0); // Repay pool0
+
+                    // Action that triggers the chain. Starts with a call to pool0.
+                    let initialAction = {
+                        action: 2,
+                        data: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                            [pool0, amount1, TRADE_CONTRACT_ADDRESS, zfo0, data1] )
+                    }; // Call pool0
+
+                    // Execute arbitrage
+                    let tx = await tradeContract.execute(initialAction);
+
+                    await tx.wait();
+                    console.log(`Transaction mined: ${tx.hash}`);
+
+                    let receipt = await tx.wait();
+                    console.log(`Gas used: ${receipt.gasUsed.toString()}`);
+
+                }
             }
-            dataStore.block.push(new Date() - sblock);
-            logger.info(`=== End of block #${blockNumber} (took ${(new Date() - sblock) / 1000} s)`);
+
+            eblock = new Date();
+            dataStore.block.push(eblock - sblock);
+            logger.info(`=== End of block #${blockNumber} (took ${(eblock - sblock) / 1000} s)`);
         }
     });
 }
