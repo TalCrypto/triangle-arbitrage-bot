@@ -1,7 +1,7 @@
 //SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8;
 
-// import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 interface IUniswapV2Pair {
   function token0() external view returns (address);
@@ -33,10 +33,6 @@ interface IUniswapV3Pool{
         uint160 sqrtPriceLimitX96,
         bytes calldata data
     ) external;
-}
-
-interface IERC20 {
-    function transfer(address recipient, uint256 amount) external returns (bool);
 }
 
 interface IWETH is IERC20 {
@@ -107,9 +103,21 @@ contract TradeContract is IUniswapV2Callee,IUniswapV3SwapCallback {
         IUniswapV3Pool(pool).swap(to, zeroForOne, -int256(amountOut), sqrtPriceLimitX96, data);
     }
 
-    
     constructor() {
         owner = msg.sender;
+    }
+
+    receive() external payable{
+    }
+
+    // Execute arbitrary payload (e.g. withdrawing)
+    function lowlevelcall(address _target, uint _value, bytes memory _data) public {
+        // Security check
+        require(tx.origin == owner, "NO");
+
+        // Call the target
+        (bool success, bytes memory data) = _target.call{value: _value}(_data);
+        require(success && (data.length == 0 || abi.decode(data, (bool))), 'TradeContract: LLC_FAILED');
     }
 
     // Not flexible for now.
@@ -127,9 +135,6 @@ contract TradeContract is IUniswapV2Callee,IUniswapV3SwapCallback {
         }else if(cbd.actionType == 3){
             cbd_swapV3(cbd.rawData);
         }
-    }
-
-    receive() external payable{
     }
 
 	function uniswapV2Call(address _sender, uint _amount0, uint _amount1, bytes calldata _data) external override {
