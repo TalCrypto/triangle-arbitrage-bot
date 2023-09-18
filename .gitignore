@@ -4,8 +4,8 @@
 data
 *.zip
 *.png
-lib
 cache
+*.toml
 
 # Logs
 logs

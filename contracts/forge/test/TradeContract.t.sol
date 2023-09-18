@@ -12,7 +12,7 @@ contract mockToken is ERC20 {
     }
 }
 
-contract mockPool {
+contract mockPoolV2 {
     address public token0;
     address public token1;
 
@@ -148,18 +148,18 @@ contract TradeContractTest is Test {
     mockToken public token0;
     mockToken public token1;
     mockToken public token2;
-    mockPool public pool0;
-    mockPool public pool1;
-    mockPool public pool2;
+    mockPoolV2 public pool0;
+    mockPoolV2 public pool1;
+    mockPoolV2 public pool2;
 
     function setUp() public {
         tradeContract = new TradeContract();
         token0 = new mockToken("Token0", "T0");
         token1 = new mockToken("Token1", "T1");
         token2 = new mockToken("Token2", "T2");
-        pool0 = new mockPool(address(token0), address(token1));
-        pool1 = new mockPool(address(token1), address(token2));
-        pool2 = new mockPool(address(token2), address(token0));
+        pool0 = new mockPoolV2(address(token0), address(token1));
+        pool1 = new mockPoolV2(address(token1), address(token2));
+        pool2 = new mockPoolV2(address(token2), address(token0));
 
         // Set up initial balances
         token0.transfer(address(pool0), 10 ether);
