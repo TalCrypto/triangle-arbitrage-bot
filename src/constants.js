@@ -31,7 +31,6 @@ const logger = createLogger({
     format: combine(
         timestamp(),
         logFormat,
-        colorize({ all: true }),
     ),
     transports: [
         new transports.Console(),
