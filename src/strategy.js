@@ -49,7 +49,9 @@ async function main() {
     }
 
     // Merge v2 and v3 pools
-    let pools = Object.assign(pools_v2, pools_v3);
+    // DEBUG: Ignore V3 pools for now
+    // let pools = Object.assign(pools_v2, pools_v3);
+    let pools = pools_v2;
     logger.info(`Initial pool count: ${Object.keys(pools).length}`);
 
     // Fetch the reserves of all pools
@@ -223,7 +225,9 @@ async function main() {
 
 
             // Display the profitable paths
-            profitablePaths.sort((a, b) => Number(b.profit) - Number(a.profit));
+            profitablePaths.sort((pathA, pathB) =>{
+                return Number(pathB.profit)/10**SAFE_TOKENS[pathB.rootToken].decimals - Number(pathA.profit)/10**SAFE_TOKENS[pathA.rootToken].decimals;
+            });
             for (let path of profitablePaths.slice(0, 1)) {
                 logger.info(`Most profitable path: ${Number(path.profit)/10**SAFE_TOKENS[path.rootToken].decimals} ${SAFE_TOKENS[path.rootToken].symbol} (${path.amountIn} wei) block #${blockNumber}`);
 
@@ -231,74 +235,95 @@ async function main() {
                 profitStore[path.rootToken] += path.profit;
                 
                 // Display info about the path
-                let amountArray = [path.amountIn];
+                let amountArray = [path.amountIn.toString()];
+                let amountOut = path.amountIn;
                 for (let i = 0; i < path.pools.length; i++) {
                     let pool = path.pools[i];
                     let zfo = path.directions[i];
-                    let amountIn = amountArray[i];
-                    let amountOut = exactTokensOut(amountIn, pool, zfo);
-                    amountArray.push(amountOut);
+                    let amountIn = amountOut; // Previous amountOut value
+                    amountOut = exactTokensOut(amountIn, pool, zfo);
+                    // DEBUG: Round to the millionth. To avoid tx fails due to rounding errors.
+                    // amountOut = Math.floor(Number(amountOut) / 10**6) * 10**6;
+                    amountArray.push(amountOut.toString());
 
                     if (pool.version == 2) {
-                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} in:${amountIn} out:${amountOut} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
+                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${zfo?pool.token0:pool.token1} tout:${zfo?pool.token1:pool.token0} in:${amountIn} out:${amountOut} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
                     } else if (pool.version == 3) {
-                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} in:${amountIn} out:${amountOut} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
+                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${zfo?pool.token0:pool.token1} tout:${zfo?pool.token1:pool.token0} in:${amountIn} out:${amountOut} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
                     }
                 }
 
                 // If the time elapsed after the block is < 1s, send an arbitrage transaction to TradeContract.sol
                 let elapsed = new Date() - sblock;
                 if (elapsed < 1000) {
-                    // Send arbitrage transaction
-                    logger.info("Sending arbitrage transaction...");
-                    
-                    // Create a signer
-                    const signer = new ethers.Wallet(PRIVATE_KEY);
-                    const account = signer.connect(provider);
-                    const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
+                    try{
+                        // Send arbitrage transaction
+                        logger.info("!!!!!!!!!!!!! Sending arbitrage transaction...");
+                                            
+                        // Create a signer
+                        const signer = new ethers.Wallet(PRIVATE_KEY);
+                        const account = signer.connect(provider);
+                        const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-                    // Token amounts involved
-                    let amount0 = amountArray[0];
-                    let amount1 = amountArray[1];
-                    let amount2 = amountArray[2];
-                    let amount3 = amountArray[3];
+                        // Token amounts involved
+                        let amount0 = amountArray[0]; // Example: 1e18
+                        let amount1 = amountArray[1]; // 1813221787760297984
+                        let amount2 = amountArray[2]; // 1530850444050214912
+                        let amount3 = amountArray[3]; // 1323519076544782336
+                        // Profit = 1323519076544782336 - 1e18 = 323519076544782336
 
-                    // zeroForOne parameter, for each pool
-                    let zfo0 = path.directions[0];
-                    let zfo1 = path.directions[1];
-                    let zfo2 = path.directions[2];
+                        // zeroForOne parameter, for each pool
+                        let zfo0 = path.directions[0];
+                        let zfo1 = path.directions[1];
+                        let zfo2 = path.directions[2];
 
-                    // Set up the callback data for each step of the arbitrage path. Start from the last step.
-                    let data3 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 0, ethers.utils.hexlify([]) ],
-                        token2, amount2); // Repay pool2
+                        // Token addresses
+                        let token0 = path.directions[0] ? path.pools[0].token0 : path.pools[0].token1;
+                        let token1 = path.directions[0] ? path.pools[0].token1 : path.pools[0].token0;
+                        let token2 = path.directions[1] ? path.pools[1].token1 : path.pools[1].token0;
 
-                    let data2 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 2,
-                        ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                            [pool2, amount3, TRADE_CONTRACT_ADDRESS, zfo2, data3] )], // Call pool2
-                        token1, amount1); // Repay pool1
+                        // Set up the callback data for each step of the arbitrage path. Start from the last step.
+                        let data3 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 
+                            0, // Specify a 'token transfer' action
+                            ethers.utils.hexlify([]) ],
+                            token2, amount2); // Repay pool2
 
-                    // In the callback of pool0, call pool1 and repay amount0 to pool0
-                    let data1 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 2,
-                        ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                            [pool1, amount2, TRADE_CONTRACT_ADDRESS, zfo1, data2] )], // Call pool1
-                        token0, amount0); // Repay pool0
+                        let data2 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 
+                            path.pools[2].version, // pool2 version (2 or 3)
+                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                                [path.pools[2].address, amount3, TRADE_CONTRACT_ADDRESS, zfo2, data3] )], // Call pool2
+                            token1, amount1); // Repay pool1
 
-                    // Action that triggers the chain. Starts with a call to pool0.
-                    let initialAction = {
-                        action: 2,
-                        data: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                            [pool0, amount1, TRADE_CONTRACT_ADDRESS, zfo0, data1] )
-                    }; // Call pool0
+                        // In the callback of pool0, call pool1 and repay amount0 to pool0
+                        let data1 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 
+                            path.pools[1].version, // pool1 version (2 or 3)
+                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                                [path.pools[1].address, amount2, TRADE_CONTRACT_ADDRESS, zfo1, data2] )], // Call pool1
+                            token0, amount0); // Repay pool0
 
-                    // Execute arbitrage
-                    let tx = await tradeContract.execute(initialAction);
+                        // Action that triggers the chain. Starts with a call to pool0.
+                        let initialAction = {
+                            action: path.pools[0].version, // pool0 version (2 or 3)
+                            data: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                                [path.pools[0].address, amount1, TRADE_CONTRACT_ADDRESS, zfo0, data1] )
+                        }; // Call pool0
 
-                    await tx.wait();
-                    console.log(`Transaction mined: ${tx.hash}`);
+                        // Execute arbitrage
+                        // let tx = await tradeContract.execute(initialAction);
+                        let tx = await tradeContract.execute([initialAction.action, initialAction.data]);
+                        logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
 
-                    let receipt = await tx.wait();
-                    console.log(`Gas used: ${receipt.gasUsed.toString()}`);
+                        await tx.wait();
+                        logger.info(`Transaction mined: ${tx.hash}`);
 
+                        let receipt = await tx.wait();
+                        logger.info(`Gas used: ${receipt.gasUsed.toString()}`);
+
+                        // Disgraceful shutdown
+                        // fgfdgdfgdf.sdtsdfi();
+                    } catch (e) {
+                        logger.error(`Error: ${e}`);
+                    }
                 }
             }
 
