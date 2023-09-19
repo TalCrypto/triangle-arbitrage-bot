@@ -19,7 +19,7 @@ async function getUniswapV2Reserves(provider, poolAddresses, pools, blockNumber)
         callData: v2PairInterface.encodeFunctionData('getReserves', []),  // 0x0902f1ac
     }));
     
-    logger.info(`Performing V2 multicall for ${poolAddresses.length} pools.`);
+    // logger.info(`Performing V2 multicall for ${poolAddresses.length} pools.`);
     const multicall = new ethers.Contract(MULTICALL_ADDRESS, MULTICALL_ABI, provider);
     const result = await multicall.callStatic.aggregate3(calls, { blockTag: blockNumber });
 
@@ -39,7 +39,7 @@ async function getUniswapV2Reserves(provider, poolAddresses, pools, blockNumber)
 async function getUniswapV3Liquidity(provider, poolAddresses, pools, blockNumber) {
     const flashQuery = new ethers.Contract(FLASH_QUERY_V3_ADDRESS, FlashQueryV3Abi, provider);
     
-    logger.info(`Performing V3 multicall for ${poolAddresses.length} pools.`);
+    // logger.info(`Performing V3 multicall for ${poolAddresses.length} pools.`);
     const result = await flashQuery.callStatic.getLiquidityV3(poolAddresses, { blockTag: blockNumber });
 
     // Result is two arrays, one for sqrtPrice and one for liquidity.
