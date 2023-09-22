@@ -129,6 +129,7 @@ module.exports = {
 
     // abi
     TRADE_CONTRACT_ABI: require('../abi/TradeContract.json'),
+    TOKEN_TOOLS_ABI: require('../abi/TokenTools.json'),
 
     // logging
     logger,
