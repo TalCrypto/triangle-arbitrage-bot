@@ -53,20 +53,30 @@ contract TokenTools is IUniswapV2Callee{
     function getTokenInfo(IERC20[] calldata _tokens) external view returns(TokenInfo[] memory){
         TokenInfo[] memory result = new TokenInfo[](_tokens.length);
         for(uint i = 0; i < _tokens.length; i++){
-            // If revert, then the token does not implement the interface, return empty values.
-            try _tokens[i].name() returns (string memory name){
-                result[i].name = name;
-            } catch {
+            // If the call reverts, then the token does not implement the ERC20 interface. We fill empty values.
+
+            // Use low level call
+            // Name
+            (bool success, bytes memory data) = address(_tokens[i]).staticcall(abi.encodeWithSignature("name()"));
+            if (success && data.length > 0) {
+                result[i].name = abi.decode(data, (string));
+            } else {
                 result[i].name = "";
             }
-            try _tokens[i].symbol() returns (string memory symbol){
-                result[i].symbol = symbol;
-            } catch {
+
+            // Symbol
+            (success, data) = address(_tokens[i]).staticcall(abi.encodeWithSignature("symbol()"));
+            if (success && data.length > 0) {
+                result[i].symbol = abi.decode(data, (string));
+            } else {
                 result[i].symbol = "";
             }
-            try _tokens[i].decimals() returns (uint8 decimals){
-                result[i].decimals = decimals;
-            } catch {
+
+            // Decimals
+            (success, data) = address(_tokens[i]).staticcall(abi.encodeWithSignature("decimals()"));
+            if (success && data.length > 0) {
+                result[i].decimals = abi.decode(data, (uint8));
+            } else {
                 result[i].decimals = 0;
             }
         }
@@ -90,14 +100,34 @@ contract TokenTools is IUniswapV2Callee{
 
             IUniswapV2Pair pool = IUniswapV2Pair(_pools[i]);
             
-            try pool.swap(
+            // Try to swap the tokens.
+            (bool success, bytes memory result) = address(pool).call(abi.encodeWithSignature(
+                "swap(uint256,uint256,address,bytes)",
                 _zeroForOne[i] ? 0 : _amountsOut[i],
                 _zeroForOne[i] ? _amountsOut[i] : 0,
                 address(this),
                 data
-            ) {
-                swapResults[i] = true;
-            } catch {
+            ));
+            
+            if (!success) {
+                // Check if the call failed with 'ok' revert message
+                if (result.length > 0) {
+                    string memory reason;
+                    // The call failed, extract the correct error message
+                    assembly {
+                        // At the location of the message string.
+                        reason := add(result, 0x44)
+                    }
+
+                    // Compare the reason string to the "ok" string.
+                    swapResults[i] = keccak256(abi.encodePacked(reason)) == keccak256(abi.encodePacked("ok"));
+                    
+                } else {
+                    // The call failed, but we don't know why.
+                    swapResults[i] = false;
+                }
+            } else {
+                // This should never happen.
                 swapResults[i] = false;
             }
         }
@@ -117,16 +147,18 @@ contract TokenTools is IUniswapV2Callee{
 
         // Check the balance beforehand and transfer the tokens.
         uint256 initialBalance = IERC20(tokenAddress).balanceOf(target);
+        
+        // Try to transfer the tokens.
         IERC20(tokenAddress).transfer(target, amount0 > 0 ? amount0 : amount1);
 
         // Check if the balance was updated correctly.
         require(
             IERC20(tokenAddress).balanceOf(target) == initialBalance + (amount0 > 0 ? amount0 : amount1),
-            "transfer failed"
+            "Funds not received"
         );
 
         // Everything went fine, revert to signal success.
+        // require(false, "ok");
         revert("ok");
     }
-
 }
