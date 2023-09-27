@@ -87,9 +87,32 @@ async function findUpdatedPools(provider, blockNumber, pools) {
     return poolAddresses;
 }
 
+// Get the square root of a BigInt.
+function sqrtBigInt(n) {
+    if (n < 0n) {
+        throw 'Square root of negative numbers is not supported';
+    }
+
+    if (n < 2n) {
+        return n;
+    }
+
+    function newtonIteration(n, x0) {
+        const x1 = ((n / x0) + x0) >> 1n;
+        if (x0 === x1 || x0 === (x1 - 1n)) {
+            return x0;
+        }
+        return newtonIteration(n, x1);
+    }
+
+    return newtonIteration(n, 1n);
+}
+
+
 
 module.exports = {
     calculateNextBlockBaseFee,
     estimateNextBlockGas,
     findUpdatedPools,
+    sqrtBigInt,
 };

@@ -1,4 +1,5 @@
 const { logger } = require('./constants');
+const { sqrtBigInt } = require('./utils');
 
 class UniswapV2Simulator {
     constructor() {}
@@ -36,27 +37,6 @@ class UniswapV2Simulator {
         let denominator = (reserveIn * BigInt(1000)) + amountInWithFee;
         return denominator == 0 ? 0 : Number(numerator / denominator);
     }
-}
-
-// Get the square root of a BigInt.
-function sqrtBigInt(n) {
-    if (n < 0n) {
-        throw 'Square root of negative numbers is not supported';
-    }
-
-    if (n < 2n) {
-        return n;
-    }
-
-    function newtonIteration(n, x0) {
-        const x1 = ((n / x0) + x0) >> 1n;
-        if (x0 === x1 || x0 === (x1 - 1n)) {
-            return x0;
-        }
-        return newtonIteration(n, x1);
-    }
-
-    return newtonIteration(n, 1n);
 }
 
 // Get sqrtPriceX96 at a specified tick.

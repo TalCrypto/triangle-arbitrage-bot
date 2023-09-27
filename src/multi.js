@@ -1,4 +1,5 @@
 const { ethers } = require('ethers');
+const { sqrtBigInt } = require('./utils');
 
 const UniswapV2PairAbi = require('../abi/UniswapV2Pair.json');
 const FlashQueryV3Abi = require('../abi/FlashQueryV3.json');
@@ -29,7 +30,7 @@ async function getUniswapV2Reserves(provider, poolAddresses, pools, blockNumber)
             let decoded = v2PairInterface.decodeFunctionResult('getReserves', response.returnData);
             pools[poolAddresses[i]].extra.reserve0 = BigInt(decoded[0]);
             pools[poolAddresses[i]].extra.reserve1 = BigInt(decoded[1]);
-            pools[poolAddresses[i]].extra.liquidity = pools[poolAddresses[i]].extra.reserve0 * pools[poolAddresses[i]].extra.reserve1;
+            pools[poolAddresses[i]].extra.liquidity = sqrtBigInt(pools[poolAddresses[i]].extra.reserve0 * pools[poolAddresses[i]].extra.reserve1);
         }
     }
 }
