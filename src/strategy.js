@@ -7,6 +7,7 @@ const {
     WSS_URL,
     PRIVATE_KEY,
     TRADE_CONTRACT_ABI,
+    SENDER_ADDRESS,
     TRADE_CONTRACT_ADDRESS,
     SAFE_TOKENS,
 } = require('./constants');
@@ -22,6 +23,7 @@ const path = require('path');
 
 async function main() {
     logger.info("Program started");
+    const chainId = 137;
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
     const providerReserves = new ethers.providers.JsonRpcProvider(HTTPS2_URL);
     const factoryAddresses_v2 = [
@@ -119,6 +121,8 @@ async function main() {
     
     // Start session timer, display profit every 30 blocks
     let sessionStart = new Date();
+    let lastGasPrice = await provider.getGasPrice();
+    let lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
     
     // Formattiing: display the cumulative opportunity profit for each token
     const dataStore = {
@@ -345,28 +349,30 @@ async function main() {
                             [path.pools[0].address, amount1, TRADE_CONTRACT_ADDRESS, zfo0, data1])
                     }; // Call pool0
 
-                        // Execute arbitrage
-                        // let tx = await tradeContract.execute(initialAction);
-                        let tx = await tradeContract.execute([initialAction.action, initialAction.data]);
-                        logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
+                    // Tx overrides
+                    let overrides = {
+                        gasPrice: lastGasPrice.mul(125).div(100), // Add 10%
+                        gasLimit: 1000000, // 1M gas
+                    };
 
-                        await tx.wait();
-                        logger.info(`Transaction mined: ${tx.hash}`);
+                    // Send arbitrage transaction
+                    let tx = await tradeContract.execute(initialAction, overrides);
+                    logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
 
-                        let receipt = await tx.wait();
-                        logger.info(`Gas used: ${receipt.gasUsed.toString()}`);
-
-                        // Disgraceful shutdown
-                        // fgfdgdfgdf.sdtsdfi();
-                    } catch (e) {
-                        logger.error(`Error: ${e}`);
-                    }
+                    // Do not wait for the transaction to be mined, so that we don't skip any blocks
+                } catch (e) {
+                    logger.error(`Error: ${e}`);
                 }
             }
 
-            eblock = new Date();
-            dataStore.block.push(eblock - sblock);
-            logger.info(`=== End of block #${blockNumber} (took ${(eblock - sblock) / 1000} s)`);
+            let blockElapsed = new Date() - sblock;
+            if (blockElapsed < 1000) {
+                // Block was processed quickly, we have time to fetch the gas price
+                lastGasPrice = await provider.getGasPrice();
+                lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
+            }
+            dataStore.block.push(blockElapsed);
+            logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
         }
     });
 }
