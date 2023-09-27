@@ -30,6 +30,11 @@ async function main() {
     ];
     const factoryAddresses_v3 = ['0x1F98431c8aD98523631AE4a59f267346ea31F984']; // Uniswap v3
 
+    // Reading approved tokens from file into an object
+    // let approvedTokens = JSON.parse(fs.readFileSync('data/dump_token_info.json', 'utf8'));
+    let approvedTokens = JSON.parse(fs.readFileSync('data/dump_valid_tokens.json', 'utf8'));
+    logger.info(`Approved token count: ${Object.keys(approvedTokens).length}`);
+
     let pools_v2, pools_v3;
     // Fetch v2, v3 pools
     // logger.info("Fetching v2 pools... (this can take a while)");
@@ -49,9 +54,15 @@ async function main() {
     }
 
     // Merge v2 and v3 pools
-    // DEBUG: Ignore V3 pools for now
-    // let pools = Object.assign(pools_v2, pools_v3);
-    let pools = pools_v2;
+    let pools = {};
+    // DEBUG: Ignore V3 pools for now ////////////////////////////
+    // for (let pool of Object.values(Object.assign(pools_v2, pools_v3))) {
+    for (let pool of Object.values(pools_v2)) {
+        // Check if both of the tokens of the pool are approved
+        if (approvedTokens[pool.token0] && approvedTokens[pool.token1]) {
+            pools[pool.address] = pool;
+        }
+    }
     logger.info(`Initial pool count: ${Object.keys(pools).length}`);
 
     // Fetch the reserves of all pools
