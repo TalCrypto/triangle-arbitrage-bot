@@ -308,31 +308,42 @@ async function main() {
                     //     }
                     // }
 
-                        // Set up the callback data for each step of the arbitrage path. Start from the last step.
-                        let data3 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 
+                    // Set up the callback data for each step of the arbitrage path. Start from the last step.
+                    let data3 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], 
+                    [
+                        [ 
                             0, // Specify a 'token transfer' action
-                            ethers.utils.hexlify([]) ],
-                            token2, amount2); // Repay pool2
+                            ethers.utils.hexlify([]) 
+                        ],
+                        token2,
+                        amount2
+                    ]); // Repay pool2
 
-                        let data2 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 
+                    let data2 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [ 
+                        [
                             path.pools[2].version, // pool2 version (2 or 3)
-                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                                [path.pools[2].address, amount3, TRADE_CONTRACT_ADDRESS, zfo2, data3] )], // Call pool2
-                            token1, amount1); // Repay pool1
+                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[2].address, amount3, TRADE_CONTRACT_ADDRESS, zfo2, data3])
+                        ], // Call pool2
+                        token1,
+                        amount1
+                    ]); // Repay pool1
 
-                        // In the callback of pool0, call pool1 and repay amount0 to pool0
-                        let data1 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 
+                    // In the callback of pool0, call pool1 and repay amount0 to pool0
+                    let data1 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [
+                        [
                             path.pools[1].version, // pool1 version (2 or 3)
-                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                                [path.pools[1].address, amount2, TRADE_CONTRACT_ADDRESS, zfo1, data2] )], // Call pool1
-                            token0, amount0); // Repay pool0
+                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[1].address, amount2, TRADE_CONTRACT_ADDRESS, zfo1, data2])
+                        ], // Call pool1
+                        token0,
+                        amount0
+                    ]); // Repay pool0
 
-                        // Action that triggers the chain. Starts with a call to pool0.
-                        let initialAction = {
-                            action: path.pools[0].version, // pool0 version (2 or 3)
-                            data: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                                [path.pools[0].address, amount1, TRADE_CONTRACT_ADDRESS, zfo0, data1] )
-                        }; // Call pool0
+                    // Action that triggers the chain. Starts with a call to pool0.
+                    let initialAction = {
+                        actionType: path.pools[0].version, // pool0 version (2 or 3)
+                        rawData: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                            [path.pools[0].address, amount1, TRADE_CONTRACT_ADDRESS, zfo0, data1])
+                    }; // Call pool0
 
                         // Execute arbitrage
                         // let tx = await tradeContract.execute(initialAction);
