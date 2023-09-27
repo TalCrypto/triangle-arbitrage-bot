@@ -10,15 +10,15 @@ const {
     TRADE_CONTRACT_ADDRESS,
     SAFE_TOKENS,
 } = require('./constants');
-const { logger, blacklistTokens } = require('./constants');
-const { loadAllPoolsFromV2, loadAllPoolsFromV3, keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSelectPaths } = require('./pools');
+const { logger } = require('./constants');
+const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSelectPaths } = require('./pools');
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { findUpdatedPools } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
-const tokens = require('./tokens');
 const fs = require('fs');
+const path = require('path');
 
 async function main() {
     logger.info("Program started");
@@ -120,7 +120,7 @@ async function main() {
     // Start session timer, display profit every 30 blocks
     let sessionStart = new Date();
     
-    // DEBUG
+    // Formattiing: display the cumulative opportunity profit for each token
     const dataStore = {
         events: [], // Store the time in ms to read the events of blocks
         reserves: [], // Store the time in ms it took to read the reserves of pools
@@ -297,6 +297,16 @@ async function main() {
                     let token0 = path.directions[0] ? path.pools[0].token0 : path.pools[0].token1;
                     let token1 = path.directions[0] ? path.pools[0].token1 : path.pools[0].token0;
                     let token2 = path.directions[1] ? path.pools[1].token1 : path.pools[1].token0;
+
+                    
+                    // for (let i = 0; i < path.pools.length; i++) {
+                    //     let pool = path.pools[i];
+                    //     if (pool.version == 2) {
+                    //         logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${zfo?pool.token0:pool.token1} tout:${zfo?pool.token1:pool.token0} in:${amountIn} out:${amountOut} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
+                    //     } else if (pool.version == 3) {
+                    //         logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${zfo?pool.token0:pool.token1} tout:${zfo?pool.token1:pool.token0} in:${amountIn} out:${amountOut} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
+                    //     }
+                    // }
 
                         // Set up the callback data for each step of the arbitrage path. Start from the last step.
                         let data3 = ethers.utils.defaultAbiCoder.encode([ 'uint', 'bytes' ], [ 
