@@ -104,7 +104,7 @@ async function loadAllPoolsFromV2(provider, factoryAddresses) {
     // }
     const toBlock = await provider.getBlockNumber();
 
-    pools = {};
+    let pools = {};
     for (let i = 0; i < factoryAddresses.length; i++) {
         // Use more efficient method to get events
         const factoryAddress = factoryAddresses[i];
