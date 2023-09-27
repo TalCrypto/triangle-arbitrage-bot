@@ -141,6 +141,21 @@ async function dumpTokens() {
             badTokens[token] = info;
         }
     }
+    // If we are at the finest granularity
+    if (CHUNK_SIZE == 1) {
+        // If every token failed, it means they are toxic in a way that is not even handled by the tokenTools contract.
+        // So flag them as bad tokens (also create an empty token object them)
+        console.log("Finest granularity reached. The failed tokens are toxic in a way that is not handled by the TokenTools contract.");
+        const flatFailedChunks = failedChunks.flat();
+        for (const token of flatFailedChunks) {
+            badTokens[token] = {
+                name: "",
+                symbol: "",
+                decimals: 0,
+            };
+        }
+        console.log("Failed tokens flagged as bad tokens: ", flatFailedChunks.length);
+    }
     // Save bad tokens to a file
     console.log("Total tokens with bad info: ", Object.keys(badTokens).length);
     fs.writeFileSync('data/dump_bad_token_info.json', JSON.stringify(badTokens), 'utf8');

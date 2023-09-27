@@ -51,6 +51,14 @@ async function dumpTokens() {
     let filteredTokenInfo = JSON.parse(fs.readFileSync('data/dump_token_info.json', 'utf8'));
     console.log("Valid token count: ", Object.keys(filteredTokenInfo).length);
     // Warning: this contains the full list of tokens (v2 and v3). We might need to ignore some.
+    // DEBUG: Uncomment to retry only tokens that failed
+    try {
+        console.log("DEBUG: Restricting to tokens that need retrying... Overriding valid tokens.");
+        filteredTokenInfo = JSON.parse(fs.readFileSync('data/dump_retry_tokens.json', 'utf8'));
+        console.log("DEBUG: Retry token count: ", Object.keys(filteredTokenInfo).length);
+    }catch (err) {
+        console.log("DEBUG: No retry tokens found.");
+    }
 
     // Make an eth_call to the tokenTools contract to get the pool info
     const tokenListFull = [];
@@ -61,7 +69,7 @@ async function dumpTokens() {
         }
     }
     // Split the tokens into chunks
-    const chunkSizeSwapTest = 100;
+    const chunkSizeSwapTest = 1;
     const tokenChunksSwapTest = tokenListFull.reduce((resultArray, item, index) => {
         const chunkIndex = Math.floor(index / chunkSizeSwapTest)
         if (!resultArray[chunkIndex]) {
@@ -92,14 +100,6 @@ async function dumpTokens() {
         console.log("No invalid token file found.");
     }
     let retryTokens = {};
-    try {
-        // Read retryTokens from file if it exists
-        const readRetry = JSON.parse(fs.readFileSync('data/dump_retry_tokens.json', 'utf8'));
-        console.log("Found retry tokens file. Read ", Object.keys(readRetry).length, " retry tokens.");
-        retryTokens = readRetry;
-    } catch (err) {
-        console.log("No retry token file found.");
-    }
     let chunkCount = 0;
     for (const tokenChunk of tokenChunksSwapTest) {
         const poolList = tokenChunk.map(token => tokenPools[token]);
@@ -121,10 +121,11 @@ async function dumpTokens() {
 
             // If the result is true, add the token to the list
             swapResults.forEach((result, index) => {
+                let token = tokenChunk[index];
                 if (result) {
-                    validTokens[tokenChunk[index]] = filteredTokenInfo[tokenChunk[index]];
+                    validTokens[token] = filteredTokenInfo[token];
                 } else {
-                    invalidTokens[tokenChunk[index]] = filteredTokenInfo[tokenChunk[index]];
+                    invalidTokens[token] = filteredTokenInfo[token];
                 }
             });
         } catch (err) {
@@ -135,16 +136,25 @@ async function dumpTokens() {
         }
         chunkCount++;
     }
-    console.log("Valid tokens: ", Object.keys(validTokens).length);
-    console.log("Failed tokens: ", Object.keys(invalidTokens).length);
-    console.log("Retry tokens: ", Object.keys(retryTokens).length);
     // Save to a file
+    // Valid tokens
+    console.log("Valid tokens: ", Object.keys(validTokens).length);
     fs.writeFileSync('data/dump_valid_tokens.json', JSON.stringify(validTokens), 'utf8');
     console.log("Token data valid saved to file.");
+    // Retry tokens
+    console.log("Retry tokens: ", Object.keys(retryTokens).length);
+    fs.writeFileSync('data/dump_retry_tokens.json', JSON.stringify(retryTokens), 'utf8');
+    console.log("Token data 'retry' saved to file. Warning: need to retry manually.");
+    // Invalid tokens
+    if (chunkSizeSwapTest == 1) {
+        // If we are at the finest granularity, save invalid tokens to file
+        console.log("Finest granularity reached (CHUNK_SIZE == 1). Retry tokens are conbsidered invalid.");
+        Object.assign(invalidTokens, retryTokens);
+        console.log("The 'retry' tokens fail in a way not handled by the TokenTools contract.");
+    }
+    console.log("Failed tokens: ", Object.keys(invalidTokens).length);
     fs.writeFileSync('data/dump_invalid_tokens.json', JSON.stringify(invalidTokens), 'utf8');
     console.log("Token data invalid saved to file.");
-    fs.writeFileSync('data/dump_retry_tokens.json', JSON.stringify(retryTokens), 'utf8');
-    console.log("Token data retry saved to file. Warning: need to retry manually (move into failed_tokens.json ?)");
 }
 
 dumpTokens();
