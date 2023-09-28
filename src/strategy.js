@@ -153,22 +153,22 @@ async function main() {
             e = new Date();
             dataStore.events.push(e - s);
             logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
-            if (touchedPools.length == 0) return; // No pools were updated, no need to continue
+            if (touchedPools.length > 0) {
 
-            // Find paths that use the touched pools
-            const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
-            let touchedPaths = [];
-            for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
-                if (pool in pathsByPool) {
-                    // Find the new paths, check if they are not already in touchedPaths
-                    let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION/touchedPools.length, 0.5);
-                    
-                    // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
-                    newPaths = newPaths.filter(path => !touchedPaths.includes(path));
-                    touchedPaths = touchedPaths.concat(newPaths);
+                // Find paths that use the touched pools
+                const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
+                let touchedPaths = [];
+                for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
+                    if (pool in pathsByPool) {
+                        // Find the new paths, check if they are not already in touchedPaths
+                        let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION/touchedPools.length, 0.5);
+                        
+                        // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
+                        newPaths = newPaths.filter(path => !touchedPaths.includes(path));
+                        touchedPaths = touchedPaths.concat(newPaths);
+                    }
                 }
-            }
-            logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
+                logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
                 // If there still are pools to refresh, process them. 
                 const N_REFRESH = 200;
@@ -197,147 +197,154 @@ async function main() {
                     return;
                 }
 
-            // For each path, compute the optimal amountIn to trade, and the profit
-            s = new Date();
-            let profitablePaths = [];
-            for (let path of touchedPaths) {
-                let amountIn = optimizeAmountIn(path);
-                if (amountIn === 0n) continue; // Grossly unprofitable
+                // For each path, compute the optimal amountIn to trade, and the profit
+                s = new Date();
+                let profitablePaths = [];
+                for (let path of touchedPaths) {
+                    let amountIn = optimizeAmountIn(path);
+                    if (amountIn === 0n) continue; // Grossly unprofitable
 
-                let profitwei = computeProfit(amountIn, path);
-                if (profitwei <= 0n) continue; // Unprofitable
-                let profitusd = safeTokens[path.rootToken].usd * Number(profitwei) / 10**safeTokens[path.rootToken].decimals;
+                    let profitwei = computeProfit(amountIn, path);
+                    if (profitwei <= 0n) continue; // Unprofitable
+                    let profitusd = safeTokens[path.rootToken].usd * Number(profitwei) / 10**safeTokens[path.rootToken].decimals;
 
-                // Store the profit and amountIn values
-                path.amountIn = amountIn;
-                path.profitwei = profitwei;
-                path.profitusd = profitusd;
-                
-                profitablePaths.push(path);
-            }
-            
-            profitablePaths.sort((pathA, pathB) =>{
-                return pathB.profitusd - pathA.profitusd;
-            });
-            const path = profitablePaths[0];
-            e = new Date();
-            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
-            
-            if (profitablePaths.length == 0) {
-                // No profitable paths, skip arbitrage transaction
-                logger.info(`No profitable paths, skipping arbitrage transaction.`);
-            
-            } else if (path.profitusd < 0.02) {
-                // Profit of the best path is too low, skip arbitrage transaction
-                logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
-            
-            } else {
-                // Display the profitable path
-                logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei)/10**SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
-
-                // Store profit in profitStore
-                profitStore[path.rootToken] += path.profitwei
-                
-                // Display info about the path. Prepare the parameters
-                path.amounts = [path.amountIn.toString()];
-                let amountOut = path.amountIn;
-                for (let i = 0; i < path.pools.length; i++) {
-                    let pool = path.pools[i];
-                    let zfo = path.directions[i];
-                    let amountIn = amountOut; // Previous amountOut value
-                    amountOut = exactTokensOut(amountIn, pool, zfo);
-                    // DEBUG: Clip to the millionth. To avoid tx fails due to rounding errors.
-                    amountOut = clipBigInt(amountOut, 6); // Maybe clip to the 7/8th ?
-                    path.amounts.push(amountOut.toString());
+                    // Store the profit and amountIn values
+                    path.amountIn = amountIn;
+                    path.profitwei = profitwei;
+                    path.profitusd = profitusd;
+                    
+                    profitablePaths.push(path);
                 }
+                
+                profitablePaths.sort((pathA, pathB) =>{
+                    return pathB.profitusd - pathA.profitusd;
+                });
+                const path = profitablePaths[0];
+                e = new Date();
+                logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
+                
+                if (profitablePaths.length == 0) {
+                    // No profitable paths, skip arbitrage transaction
+                    logger.info(`No profitable paths, skipping arbitrage transaction.`);
+                
+                } else if (path.profitusd < 0.02) {
+                    // Profit of the best path is too low, skip arbitrage transaction
+                    logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
+                
+                } else {
+                    // Display the profitable path
+                    logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei)/10**SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
 
-                let elapsed = new Date() - sblock;
-                if (elapsed > 1000) {
-                    // If the time elapsed is > 1000ms, we skip the arbitrage transaction
-                    logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping arbitrage transaction.`);
-                    return;
-                }
-                try{
-                    // Send arbitrage transaction
-                    logger.info("!!!!!!!!!!!!! Sending arbitrage transaction...");
-                                        
-                    // Create a signer
-                    const signer = new ethers.Wallet(PRIVATE_KEY);
-                    const account = signer.connect(provider);
-                    const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
-
-                    // Print info about the path/pools/token amounts
+                    // Store profit in profitStore
+                    profitStore[path.rootToken] += path.profitwei
+                    
+                    // Display info about the path. Prepare the parameters
+                    path.amounts = [path.amountIn.toString()];
+                    let amountOut = path.amountIn;
                     for (let i = 0; i < path.pools.length; i++) {
                         let pool = path.pools[i];
                         let zfo = path.directions[i];
-                        let tin = zfo ? pool.token0 : pool.token1;
-                        let tout = zfo ? pool.token1 : pool.token0;
-                        if (pool.version == 2) {
-                            logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
-                        } else if (pool.version == 3) {
-                            logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
-                        }
+                        let amountIn = amountOut; // Previous amountOut value
+                        amountOut = exactTokensOut(amountIn, pool, zfo);
+                        // DEBUG: Clip to the millionth. To avoid tx fails due to rounding errors.
+                        amountOut = clipBigInt(amountOut, 6); // Maybe clip to the 7/8th ?
+                        path.amounts.push(amountOut.toString());
                     }
 
-                    // Set up the callback data for each step of the arbitrage path. Start from the last step.
-                    let data3 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], 
-                    [
-                        [ 
-                            0, // Specify a 'token transfer' action
-                            ethers.utils.hexlify([]) 
-                        ],
-                        path.directions[2] ? path.pools[2].token0 : path.pools[2].token1, // token2
-                        path.amounts[2]
-                    ]); // Repay pool2
+                    let elapsed = new Date() - sblock;
+                    if (elapsed > 1000) {
+                        // If the time elapsed is > 1000ms, we skip the arbitrage transaction
+                        logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
+                        return;
+                    }
+                    try{
+                        // Send arbitrage transaction
+                        logger.info("!!!!!!!!!!!!! Sending arbitrage transaction...");
+                                            
+                        // Create a signer
+                        const signer = new ethers.Wallet(PRIVATE_KEY);
+                        const account = signer.connect(provider);
+                        const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-                    let data2 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [ 
+                        // Print info about the path/pools/token amounts
+                        for (let i = 0; i < path.pools.length; i++) {
+                            let pool = path.pools[i];
+                            let zfo = path.directions[i];
+                            let tin = zfo ? pool.token0 : pool.token1;
+                            let tout = zfo ? pool.token1 : pool.token0;
+                            if (pool.version == 2) {
+                                logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
+                            } else if (pool.version == 3) {
+                                logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
+                            }
+                        }
+
+                        // Set up the callback data for each step of the arbitrage path. Start from the last step.
+                        let data3 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], 
                         [
-                            path.pools[2].version, // pool2 version (2 or 3)
-                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[2].address, path.amounts[3], TRADE_CONTRACT_ADDRESS, path.directions[2], data3])
-                        ], // Call pool2
-                        path.directions[1] ? path.pools[1].token0 : path.pools[1].token1, // token1
-                        path.amounts[1]
-                    ]); // Repay pool1
+                            [ 
+                                0, // Specify a 'token transfer' action
+                                ethers.utils.hexlify([]) 
+                            ],
+                            path.directions[2] ? path.pools[2].token0 : path.pools[2].token1, // token2
+                            path.amounts[2]
+                        ]); // Repay pool2
 
-                    // In the callback of pool0, call pool1 and repay path.amounts[0] to pool0
-                    let data1 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [
-                        [
-                            path.pools[1].version, // pool1 version (2 or 3)
-                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[1].address, path.amounts[2], TRADE_CONTRACT_ADDRESS, path.directions[1], data2])
-                        ], // Call pool1
-                        path.directions[0] ? path.pools[0].token0 : path.pools[0].token1, // token0
-                        path.amounts[0]
-                    ]); // Repay pool0
+                        let data2 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [ 
+                            [
+                                path.pools[2].version, // pool2 version (2 or 3)
+                                ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[2].address, path.amounts[3], TRADE_CONTRACT_ADDRESS, path.directions[2], data3])
+                            ], // Call pool2
+                            path.directions[1] ? path.pools[1].token0 : path.pools[1].token1, // token1
+                            path.amounts[1]
+                        ]); // Repay pool1
 
-                    // Action that triggers the chain. Starts with a call to pool0.
-                    let initialAction = {
-                        actionType: path.pools[0].version, // pool0 version (2 or 3)
-                        rawData: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                            [path.pools[0].address, path.amounts[1], TRADE_CONTRACT_ADDRESS, path.directions[0], data1])
-                    }; // Call pool0
+                        // In the callback of pool0, call pool1 and repay path.amounts[0] to pool0
+                        let data1 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [
+                            [
+                                path.pools[1].version, // pool1 version (2 or 3)
+                                ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[1].address, path.amounts[2], TRADE_CONTRACT_ADDRESS, path.directions[1], data2])
+                            ], // Call pool1
+                            path.directions[0] ? path.pools[0].token0 : path.pools[0].token1, // token0
+                            path.amounts[0]
+                        ]); // Repay pool0
 
-                    // Tx overrides
-                    let overrides = {
-                        gasPrice: lastGasPrice.mul(125).div(100), // Add 10%
-                        gasLimit: 1000000, // 1M gas
-                    };
+                        // Action that triggers the chain. Starts with a call to pool0.
+                        let initialAction = {
+                            actionType: path.pools[0].version, // pool0 version (2 or 3)
+                            rawData: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
+                                [path.pools[0].address, path.amounts[1], TRADE_CONTRACT_ADDRESS, path.directions[0], data1])
+                        }; // Call pool0
 
-                    // Send arbitrage transaction
-                    let tx = await tradeContract.execute(initialAction, overrides);
-                    logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
+                        // Tx overrides
+                        let overrides = {
+                            gasPrice: lastGasPrice.mul(125).div(100), // Add 10%
+                            gasLimit: 1000000, // 1M gas
+                            nonce: lastTxCount,
+                        };
 
-                    // Do not wait for the transaction to be mined, so that we don't skip any blocks
-                } catch (e) {
-                    logger.error(`Error: ${e}`);
+                        // Send arbitrage transaction
+                        let tx = await tradeContract.execute(initialAction, overrides);
+                        logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
+                        lastTxCount++;
+
+                        // Do not wait for the transaction to be mined, so that we don't skip any blocks
+                    } catch (e) {
+                        logger.error(`Error: ${e}`);
+                    }
                 }
             }
 
-            let blockElapsed = new Date() - sblock;
             if (blockElapsed < 1000) {
-                // Block was processed quickly, we have time to fetch the gas price
-                lastGasPrice = await provider.getGasPrice();
-                lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
+                try {
+                    // Block was processed quickly, we have time to fetch the gas price
+                    lastGasPrice = await provider.getGasPrice();
+                    lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
+                } catch (e) {
+                    logger.error(`Error when fetching gasPrice/txCount: ${e}`);
+                }
             }
+            let blockElapsed = new Date() - sblock;
             dataStore.block.push(blockElapsed);
             logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
         }
