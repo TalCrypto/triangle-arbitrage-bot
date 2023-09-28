@@ -32,6 +32,8 @@ interface IUniswapV3Pool{
     function token1() external view returns (address);
 	function liquidity() external view returns (uint128);
 	function slot0() external view returns (uint160,int24,uint16,uint16,uint16,uint8,bool);
+    // slot() returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)
+    function tickSpacing() external view returns (int24);
 
     function swap(
         address recipient,
@@ -66,6 +68,7 @@ contract Arbitrage is Script, StdCheats {
         // (uint160,int24,uint16,uint16,uint16,uint8,bool)
         (uint160 sqrtX96,,,,,,) = IUniswapV3Pool(pool).slot0();
         uint128 liquidity = IUniswapV3Pool(pool).liquidity();
+        int24 tickSpacing = IUniswapV3Pool(pool).tickSpacing();
 
         console.log("= Uniswap V3 =");
         console.log("Pool: ", pool);
@@ -73,6 +76,8 @@ contract Arbitrage is Script, StdCheats {
         console.log("Token1: ", IUniswapV3Pool(pool).token1());
         console.log("sqrtX96: ", sqrtX96);
         console.log("liquidity: ", liquidity);
+        console.log("tickSpacing: ");
+        console.logInt(tickSpacing);
 	}
 
     // Compute the exact amount of tokens produced by a given input, using a Uniswap V2 pool. Not needed for Uniswap V3.
@@ -172,51 +177,57 @@ contract Arbitrage is Script, StdCheats {
     function run() external {
         // Read data from the pools
         console.log("#### Data read from pools ####");
-        address pool1 = 0x1A6F6af2864b1f059A2E070140e373D6e3AAA2A1;
-        address pool2 = 0x6CE2400ABd570b38eE2937D44521ee77773eA7e4;
-        address pool3 = 0x4152ea409F10F7d6efDCa92149fDE430A8712b02;
-        readV2(pool1);
+        address pool1 = 0x45dDa9cb7c25131DF268515131f647d726f50608;
+        address pool2 = 0x40A8772A6C917569d28A136A458E3051B96b4AC3;
+        address pool3 = 0xbDe5A832760A4C126eEC959ec825D37DC6872064;
+        readV3(pool1);
         readV2(pool2);
         readV2(pool3);
 
-
         // Pool 1
         console.log("#### Pool 1 ####");
-        uint amountIn = 21586;
-        address tokenIn = 0xc2132D05D31c914a87C6611C10748AEb04B58e8F;
-        bool zeroForOne = false;
+        uint amountIn = 3957993;
+        address tokenIn = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+        bool zeroForOne = true;
         // Deal input tokens, send them to the pool
-        uint tokenBalance = IERC20(tokenIn).balanceOf(address(this));
-        console.log("TokenIn balance before: ", tokenBalance);
         deal(tokenIn, address(this), amountIn);
-        tokenBalance = IERC20(tokenIn).balanceOf(address(this));
-        console.log("TokenIn balance after: ", tokenBalance);
-        IERC20(tokenIn).transfer(pool1, amountIn);
-        uint amountOut = swapV2(pool1, tokenIn, amountIn, zeroForOne);
-        console.log("TokenOut received: ", amountOut); // 12723444981068115933
-
+        uint tokenBalance = IERC20(tokenIn).balanceOf(address(this));
+        console.log("TokenIn balance before swap: ", tokenBalance);
+        // IERC20(tokenIn).transfer(pool1, amountIn);
+        // uint amountOut = swapV2(pool1, tokenIn, amountIn, zeroForOne);
+        uint amountOut = swapV3(pool1, zeroForOne, amountIn);
+        console.log("TokenOut received: ", amountOut); // 2446484739300292
+        // 2446484739300292 actual
+        // 2446484741464768 expected js
+        // 2446485355983706 expected py
+        // 2446484000000000 clipped js
 
         // Pool 2
         console.log("#### Pool 2 ####");
-        amountIn = 12723444981068115933;
-        tokenIn = 0x204820B6e6FEae805e376D2C6837446186e57981;
+        // amountIn = 2446484000000000;
+        amountIn = 2446484739300292;
+        tokenIn = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
         zeroForOne = true;
         tokenBalance = IERC20(tokenIn).balanceOf(address(this));
         console.log("TokenIn balance: ", tokenBalance);
         IERC20(tokenIn).transfer(pool2, amountIn);
         uint amountOut2 = swapV2(pool2, tokenIn, amountIn, zeroForOne);
-        console.log("TokenOut received: ", amountOut2); // 3980637485678051984410
+        console.log("TokenOut received: ", amountOut2); // 221736591346427676452
+        // 221736591346427676452 actual
+        // 260866578054620795825
+        // 260866655305567282352 expected js
 
-        // Pool 3
-        console.log("#### Pool 3 ####");
-        amountIn = 3980637485678051984410;
-        tokenIn = 0x7Ecb5699D8E0a6572E549Dc86dDe5A785B8c29BC;
-        zeroForOne = true;
-        tokenBalance = IERC20(tokenIn).balanceOf(address(this));
-        console.log("TokenIn balance: ", tokenBalance);
-        IERC20(tokenIn).transfer(pool3, amountIn);
-        uint amountOut3 = swapV2(pool3, tokenIn, amountIn, zeroForOne);
-        console.log("TokenOut received: ", amountOut3);
+
+        // // Pool 3
+        // console.log("#### Pool 3 ####");
+        // amountIn = 3980637485678051984410;
+        // tokenIn = 0x7Ecb5699D8E0a6572E549Dc86dDe5A785B8c29BC;
+        // zeroForOne = true;
+        // tokenBalance = IERC20(tokenIn).balanceOf(address(this));
+        // console.log("TokenIn balance: ", tokenBalance);
+        // IERC20(tokenIn).transfer(pool3, amountIn);
+        // uint amountOut3 = swapV2(pool3, tokenIn, amountIn, zeroForOne);
+        // console.log("TokenOut received: ", amountOut3);
 
     }
 }
