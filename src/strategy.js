@@ -144,7 +144,7 @@ async function main() {
 
             // Display profit every 30 blocks
             if (blockNumber % 30 == 0) {
-                utils.displayStats(sessionStart, logger, approvedTokens, dataStore, profitStore);
+                displayStats(sessionStart, logger, approvedTokens, dataStore, profitStore);
             }
 
             // Find pools that were updated in the last block
@@ -335,6 +335,7 @@ async function main() {
                 }
             }
 
+            let blockElapsed = new Date() - sblock;
             if (blockElapsed < 1000) {
                 try {
                     // Block was processed quickly, we have time to fetch the gas price
@@ -344,7 +345,6 @@ async function main() {
                     logger.error(`Error when fetching gasPrice/txCount: ${e}`);
                 }
             }
-            let blockElapsed = new Date() - sblock;
             dataStore.block.push(blockElapsed);
             logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
         }
