@@ -16,7 +16,7 @@ const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSel
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
-const { findUpdatedPools, clipBigInt } = require('./utils');
+const { findUpdatedPools, clipBigInt, displayStats } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
 const fs = require('fs');
 const path = require('path');
@@ -82,12 +82,7 @@ async function main() {
     // ...
 
     // Load safe tokens, from which we will constitute the root of our arb paths
-    // const safeTokens = await tokens.getSafeTokens(); // Only works on Ethereum mainnet. TODO: Find a way to make it work on Polygon
     const safeTokens = SAFE_TOKENS;
-    const profitStore = {}; // Store the profit of each root token
-    for (let token in safeTokens) {
-        profitStore[token] = 0n;
-    }
     logger.info(`Safe token count: ${Object.keys(safeTokens).length}`);
     
     // Find paths of length 2,3 starting from each safe token.
@@ -125,12 +120,18 @@ async function main() {
     let lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
     let poolsToRefresh = Object.keys(pools); // Once the bot starts receiving blocks, we refresh gradually the reserves of every pool, ensuring that our profit math is always correct.
     
-    // Formattiing: display the cumulative opportunity profit for each token
+    // Data collection //
+    // Latency for various operations
     const dataStore = {
         events: [], // Store the time in ms to read the events of blocks
         reserves: [], // Store the time in ms it took to read the reserves of pools
         block: [], // Store the total time in ms it took to process a block
     };
+    // Opportunities found
+    const profitStore = {}; // Store the profit of each root token
+    for (let token in safeTokens) {
+        profitStore[token] = 0n;
+    }
         
     // Start listening to new blocks using websockets (TODO: measure latency)
     let eventEmitter = new EventEmitter();
@@ -143,36 +144,7 @@ async function main() {
 
             // Display profit every 30 blocks
             if (blockNumber % 30 == 0) {
-                let sessionEnd = new Date();
-                let sessionDuration = (sessionEnd - sessionStart) / 1000;
-                logger.info("===== Profit Recap =====")
-                
-                // For each token, display the profit in decimals
-                for (let token in profitStore) {
-                    let profit = Number(profitStore[token]) / 10**safeTokens[token].decimals;
-                    logger.info(`${safeTokens[token].symbol}: ${profit} $${profit*safeTokens[token].usd} (${token})`);
-                }
-                logger.info(`Session duration: ${sessionDuration} seconds (${sessionDuration / 60} minutes) (${sessionDuration / 60 / 60} hours)`);
-                logger.info("========================")
-
-                // DEBUG
-                // Print time decile values: events, reserves, block
-                dataStore.events.sort((a, b) => a - b);
-                dataStore.reserves.sort((a, b) => a - b);
-                dataStore.block.sort((a, b) => a - b);
-                let eventDeciles = [];
-                let reserveDeciles = [];
-                let blockDeciles = [];
-                for (let i = 0; i < 10; i++) {
-                    eventDeciles.push(dataStore.events[Math.floor(i * dataStore.events.length / 10)]);
-                    reserveDeciles.push(dataStore.reserves[Math.floor(i * dataStore.reserves.length / 10)]);
-                    blockDeciles.push(dataStore.block[Math.floor(i * dataStore.block.length / 10)]);
-                }
-                logger.info("///// Time Stats /////")
-                logger.info(`Event deciles: ${eventDeciles}`);
-                logger.info(`Reserve deciles: ${reserveDeciles}`);
-                logger.info(`Block deciles: ${blockDeciles}`);
-                logger.info("//////////////////////")
+                utils.displayStats(sessionStart, logger, approvedTokens, dataStore, profitStore);
             }
 
             // Find pools that were updated in the last block

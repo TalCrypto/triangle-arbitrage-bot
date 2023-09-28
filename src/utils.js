@@ -123,6 +123,39 @@ function clipBigInt(num, precision) {
     }
 }
 
+// Display bot stats
+function displayStats(sessionStart, logger, approvedTokens, dataStore, profitStore){
+    logger.info("===== Profit Recap =====")
+    let sessionDuration = (new Date() - sessionStart) / 1000;
+    logger.info(`Session duration: ${sessionDuration} seconds (${sessionDuration / 60} minutes) (${sessionDuration / 60 / 60} hours)`);
+    
+    // For each token, display the profit in decimals
+    for (let token in profitStore) {
+        let profit = Number(profitStore[token]) / 10**approvedTokens[token].decimals;
+        logger.info(`${approvedTokens[token].symbol}: ${profit} $${profit*approvedTokens[token].usd} (${token})`);
+    }
+    logger.info("========================")
+
+    // DEBUG
+    // Print time decile values: events, reserves, block
+    dataStore.events.sort((a, b) => a - b);
+    dataStore.reserves.sort((a, b) => a - b);
+    dataStore.block.sort((a, b) => a - b);
+    let eventDeciles = [];
+    let reserveDeciles = [];
+    let blockDeciles = [];
+    for (let i = 0; i < 10; i++) {
+        eventDeciles.push(dataStore.events[Math.floor(i * dataStore.events.length / 10)]);
+        reserveDeciles.push(dataStore.reserves[Math.floor(i * dataStore.reserves.length / 10)]);
+        blockDeciles.push(dataStore.block[Math.floor(i * dataStore.block.length / 10)]);
+    }
+    logger.info("///// Time Stats /////")
+    logger.info(`Event deciles: ${eventDeciles}`);
+    logger.info(`Reserve deciles: ${reserveDeciles}`);
+    logger.info(`Block deciles: ${blockDeciles}`);
+    logger.info("//////////////////////")
+}
+
 
 module.exports = {
     calculateNextBlockBaseFee,
@@ -130,4 +163,5 @@ module.exports = {
     findUpdatedPools,
     sqrtBigInt,
     clipBigInt,
+    displayStats,
 };
