@@ -123,6 +123,7 @@ async function main() {
     let sessionStart = new Date();
     let lastGasPrice = await provider.getGasPrice();
     let lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
+    let poolsToRefresh = Object.keys(pools); // Once the bot starts receiving blocks, we refresh gradually the reserves of every pool, ensuring that our profit math is always correct.
     
     // Formattiing: display the cumulative opportunity profit for each token
     const dataStore = {
@@ -197,23 +198,32 @@ async function main() {
             }
             logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
-
-            // DEBUG
-            // Update the reserves of every pool involved in a touched path
-            let involvedPoolsSet = new Set();
-            for (let path of touchedPaths) {
-                for (let pool of path.pools) {
-                    involvedPoolsSet.add(pool.address);
+                // If there still are pools to refresh, process them. 
+                const N_REFRESH = 200;
+                // Append N_REFRESH pools and touched pools
+                let fetchPools = poolsToRefresh.slice(0, N_REFRESH);
+                fetchPools = fetchPools.concat(touchedPools);
+                if (fetchPools.length > 0) {
+                    logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
+                    s = new Date();
+                    await batchReserves(providerReserves, pools, fetchPools, 1000, 2, blockNumber);
+                    e = new Date();
+                    dataStore.reserves.push(e - s);
+                    logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
                 }
-            }
-            let involvedPoolsList = Array.from(involvedPoolsSet);
-            logger.info(`Fetching reserves for ${involvedPoolsList.length} involved pools. Block #${blockNumber}`);
-            s = new Date();
-            await batchReserves(providerReserves, pools, involvedPoolsList, 1000, 2, blockNumber);
-            e = new Date();
-            dataStore.reserves.push(e - s);
-            logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
-
+                // Update poolsToRefresh array
+                poolsToRefresh = poolsToRefresh.slice(N_REFRESH);
+                // There are still some remaining pools to refresh. Will be done in the next block.
+                if (poolsToRefresh.length > 0) {
+                    logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
+                    return;
+                }
+                let elapsed = new Date() - sblock;
+                if (elapsed > 1000) {
+                    // If the time elapsed is > 1000ms, we skip the arbitrage transaction
+                    logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
+                    return;
+                }
 
             // For each path, compute the optimal amountIn to trade, and the profit
             s = new Date();
