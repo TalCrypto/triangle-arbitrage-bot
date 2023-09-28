@@ -144,7 +144,7 @@ async function main() {
 
             // Display profit every 30 blocks
             if (blockNumber % 30 == 0) {
-                displayStats(sessionStart, logger, approvedTokens, dataStore, profitStore);
+                displayStats(sessionStart, logger, safeTokens, dataStore, profitStore);
             }
 
             // Find pools that were updated in the last block
@@ -153,50 +153,51 @@ async function main() {
             e = new Date();
             dataStore.events.push(e - s);
             logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
-            if (touchedPools.length > 0) {
 
-                // Find paths that use the touched pools
-                const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
-                let touchedPaths = [];
-                for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
-                    if (pool in pathsByPool) {
-                        // Find the new paths, check if they are not already in touchedPaths
-                        let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION/touchedPools.length, 0.5);
-                        
-                        // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
-                        newPaths = newPaths.filter(path => !touchedPaths.includes(path));
-                        touchedPaths = touchedPaths.concat(newPaths);
-                    }
+            // Find paths that use the touched pools
+            const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
+            let touchedPaths = [];
+            for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
+                if (pool in pathsByPool) {
+                    // Find the new paths, check if they are not already in touchedPaths
+                    let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION/touchedPools.length, 0.5);
+                    
+                    // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
+                    newPaths = newPaths.filter(path => !touchedPaths.includes(path));
+                    touchedPaths = touchedPaths.concat(newPaths);
                 }
-                logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
+            }
+            logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
-                // If there still are pools to refresh, process them. 
-                const N_REFRESH = 200;
-                // Append N_REFRESH pools and touched pools
-                let fetchPools = poolsToRefresh.slice(0, N_REFRESH);
-                fetchPools = fetchPools.concat(touchedPools);
-                if (fetchPools.length > 0) {
-                    logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
-                    s = new Date();
-                    await batchReserves(providerReserves, pools, fetchPools, 1000, 2, blockNumber);
-                    e = new Date();
-                    dataStore.reserves.push(e - s);
-                    logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
-                }
-                // Update poolsToRefresh array
-                poolsToRefresh = poolsToRefresh.slice(N_REFRESH);
-                // There are still some remaining pools to refresh. Will be done in the next block.
-                if (poolsToRefresh.length > 0) {
-                    logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
-                    return;
-                }
-                let elapsed = new Date() - sblock;
-                if (elapsed > 1000) {
+            // If there still are pools to refresh, process them. 
+            const N_REFRESH = 200;
+            // Append N_REFRESH pools and touched pools
+            let fetchPools = poolsToRefresh.slice(0, N_REFRESH);
+            fetchPools = fetchPools.concat(touchedPools);
+            if (fetchPools.length > 0) {
+                logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
+                s = new Date();
+                await batchReserves(providerReserves, pools, fetchPools, 1000, 2, blockNumber);
+                e = new Date();
+                dataStore.reserves.push(e - s);
+                logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
+            }
+            // Update poolsToRefresh array
+            poolsToRefresh = poolsToRefresh.slice(N_REFRESH);
+            // There are still some remaining pools to refresh. Will be done in the next block.
+            if (poolsToRefresh.length > 0) {
+                logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
+                return;
+            }
+            let elapsed = new Date() - sblock;
+            if (elapsed > 1000) {
                 // If the time elapsed is > 1000ms, we skip the arbitrage transaction
-                    logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
-                    return;
-                }
+                logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
+                return;
+            }
 
+            // Make sure that there are paths to evaluate.
+            if (touchedPaths.length > 0) {
                 // For each path, compute the optimal amountIn to trade, and the profit
                 s = new Date();
                 let profitablePaths = [];
