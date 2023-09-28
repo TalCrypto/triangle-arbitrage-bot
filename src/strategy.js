@@ -16,7 +16,7 @@ const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSel
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
-const { findUpdatedPools } = require('./utils');
+const { findUpdatedPools, clipBigInt } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
 const fs = require('fs');
 const path = require('path');
@@ -257,17 +257,16 @@ async function main() {
                 profitStore[path.rootToken] += path.profitwei
                 
                 // Display info about the path. Prepare the parameters
-                let amountArray = [path.amountIn.toString()];
+                path.amounts = [path.amountIn.toString()];
                 let amountOut = path.amountIn;
                 for (let i = 0; i < path.pools.length; i++) {
                     let pool = path.pools[i];
                     let zfo = path.directions[i];
                     let amountIn = amountOut; // Previous amountOut value
                     amountOut = exactTokensOut(amountIn, pool, zfo);
-                    // DEBUG: Round to the millionth. To avoid tx fails due to rounding errors.
-                    // Seems to not be needed for now.
-                    // amountOut = Math.floor(Number(amountOut) / 10**6) * 10**6;
-                    amountArray.push(amountOut.toString());
+                    // DEBUG: Clip to the millionth. To avoid tx fails due to rounding errors.
+                    amountOut = clipBigInt(amountOut, 6); // Maybe clip to the 7/8th ?
+                    path.amounts.push(amountOut.toString());
                 }
 
                 let elapsed = new Date() - sblock;
@@ -285,32 +284,18 @@ async function main() {
                     const account = signer.connect(provider);
                     const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-                    // Token amounts involved
-                    let amount0 = amountArray[0]; // Example: 1e18
-                    let amount1 = amountArray[1]; // 1813221787760297984
-                    let amount2 = amountArray[2]; // 1530850444050214912
-                    let amount3 = amountArray[3]; // 1323519076544782336
-                    // Profit = 1323519076544782336 - 1e18 = 323519076544782336
-
-                    // zeroForOne parameter, for each pool
-                    let zfo0 = path.directions[0];
-                    let zfo1 = path.directions[1];
-                    let zfo2 = path.directions[2];
-
-                    // Token addresses
-                    let token0 = path.directions[0] ? path.pools[0].token0 : path.pools[0].token1;
-                    let token1 = path.directions[0] ? path.pools[0].token1 : path.pools[0].token0;
-                    let token2 = path.directions[1] ? path.pools[1].token1 : path.pools[1].token0;
-
-                    
-                    // for (let i = 0; i < path.pools.length; i++) {
-                    //     let pool = path.pools[i];
-                    //     if (pool.version == 2) {
-                    //         logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${zfo?pool.token0:pool.token1} tout:${zfo?pool.token1:pool.token0} in:${amountIn} out:${amountOut} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
-                    //     } else if (pool.version == 3) {
-                    //         logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${zfo?pool.token0:pool.token1} tout:${zfo?pool.token1:pool.token0} in:${amountIn} out:${amountOut} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
-                    //     }
-                    // }
+                    // Print info about the path/pools/token amounts
+                    for (let i = 0; i < path.pools.length; i++) {
+                        let pool = path.pools[i];
+                        let zfo = path.directions[i];
+                        let tin = zfo ? pool.token0 : pool.token1;
+                        let tout = zfo ? pool.token1 : pool.token0;
+                        if (pool.version == 2) {
+                            logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
+                        } else if (pool.version == 3) {
+                            logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
+                        }
+                    }
 
                     // Set up the callback data for each step of the arbitrage path. Start from the last step.
                     let data3 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], 
@@ -319,34 +304,34 @@ async function main() {
                             0, // Specify a 'token transfer' action
                             ethers.utils.hexlify([]) 
                         ],
-                        token2,
-                        amount2
+                        path.directions[2] ? path.pools[2].token0 : path.pools[2].token1, // token2
+                        path.amounts[2]
                     ]); // Repay pool2
 
                     let data2 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [ 
                         [
                             path.pools[2].version, // pool2 version (2 or 3)
-                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[2].address, amount3, TRADE_CONTRACT_ADDRESS, zfo2, data3])
+                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[2].address, path.amounts[3], TRADE_CONTRACT_ADDRESS, path.directions[2], data3])
                         ], // Call pool2
-                        token1,
-                        amount1
+                        path.directions[1] ? path.pools[1].token0 : path.pools[1].token1, // token1
+                        path.amounts[1]
                     ]); // Repay pool1
 
-                    // In the callback of pool0, call pool1 and repay amount0 to pool0
+                    // In the callback of pool0, call pool1 and repay path.amounts[0] to pool0
                     let data1 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [
                         [
                             path.pools[1].version, // pool1 version (2 or 3)
-                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[1].address, amount2, TRADE_CONTRACT_ADDRESS, zfo1, data2])
+                            ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[1].address, path.amounts[2], TRADE_CONTRACT_ADDRESS, path.directions[1], data2])
                         ], // Call pool1
-                        token0,
-                        amount0
+                        path.directions[0] ? path.pools[0].token0 : path.pools[0].token1, // token0
+                        path.amounts[0]
                     ]); // Repay pool0
 
                     // Action that triggers the chain. Starts with a call to pool0.
                     let initialAction = {
                         actionType: path.pools[0].version, // pool0 version (2 or 3)
                         rawData: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                            [path.pools[0].address, amount1, TRADE_CONTRACT_ADDRESS, zfo0, data1])
+                            [path.pools[0].address, path.amounts[1], TRADE_CONTRACT_ADDRESS, path.directions[0], data1])
                     }; // Call pool0
 
                     // Tx overrides

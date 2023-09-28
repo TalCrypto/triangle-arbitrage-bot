@@ -108,6 +108,20 @@ function sqrtBigInt(n) {
     return newtonIteration(n, 1n);
 }
 
+// Clip a number to a given decimal precision.
+function clipBigInt(num, precision) {
+    // Our Uniswap Math uses JS Number which can lack precision. This clips some amount of token.
+    // The result should minimize our expected profit by a negligible amount.
+    // This has the benefit of giving confident in the fact that our transactions will succeed.
+    let numDecimals = num.toString().length - 1;
+
+    let clipDecimals = numDecimals - precision;
+    if (clipDecimals > 0) {
+        return (num / BigInt(10 ** clipDecimals)) * BigInt(10 ** clipDecimals);
+    } else {
+        return num;
+    }
+}
 
 
 module.exports = {
@@ -115,4 +129,5 @@ module.exports = {
     estimateNextBlockGas,
     findUpdatedPools,
     sqrtBigInt,
+    clipBigInt,
 };
