@@ -192,7 +192,7 @@ async function main() {
                 }
                 let elapsed = new Date() - sblock;
                 if (elapsed > 1000) {
-                    // If the time elapsed is > 1000ms, we skip the arbitrage transaction
+                // If the time elapsed is > 1000ms, we skip the arbitrage transaction
                     logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
                     return;
                 }
