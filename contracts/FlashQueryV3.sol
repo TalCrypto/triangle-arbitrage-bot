@@ -28,3 +28,9 @@ contract FlashQuery{
 }
 
 // Deployed on Polygon at 0xa5aeC6cF29e66fD47F6a05dcc0c8aCD308d80B4E
+
+// Note: Spacing vs Fee (in % of bip = 1/1 000 000) in V3
+// 1 = 100 (0.01%)
+// 10 = 500 (0.05%)
+// 60 = 3000 (0.3%)
+// 200 = 10000 (1%)
