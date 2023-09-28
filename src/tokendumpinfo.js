@@ -133,8 +133,10 @@ async function dumpTokens() {
         console.log("No bad tokens file found.");
     }
     for (const [token, info] of Object.entries(tokenInfo)) {
-        if (info.name && info.symbol && info.decimals > 0) {
+        if (info.name && info.symbol && info.decimals > 2) {
             // Good token (at least has name, symbol, decimals)
+            // A decimal of < 6 is indicative of a likely (though not always) bad token.
+            // Also in the trySwap script, we assume each token has at least 2 decimals for simplicity.
             filteredTokenInfo[token] = info;
         } else {
             // Bad token

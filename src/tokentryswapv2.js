@@ -105,7 +105,7 @@ async function dumpTokens() {
         const poolList = tokenChunk.map(token => tokenPools[token]);
         const poolAddresses = poolList.map(pool => pool.address);
         const amountList = tokenChunk.map(token => {
-            return 1; // 1 unit of the token. Lowest possible amount.
+            return 100; // 100 unit of the token. Should not be a problem.
         });
         const zeroForOneList = poolList.map(pool => pool.token0 == WMATIC); // swap target token for WMATIC
         
