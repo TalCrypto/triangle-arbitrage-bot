@@ -23,7 +23,6 @@ const path = require('path');
 
 async function main() {
     logger.info("Program started");
-    const chainId = 137;
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
     const providerReserves = new ethers.providers.JsonRpcProvider(HTTPS2_URL);
     const factoryAddresses_v2 = [
@@ -58,8 +57,8 @@ async function main() {
     // Merge v2 and v3 pools
     let pools = {};
     // DEBUG: Ignore V3 pools for now ////////////////////////////
-    // for (let pool of Object.values(Object.assign(pools_v2, pools_v3))) {
-    for (let pool of Object.values(pools_v2)) {
+    for (let pool of Object.values(Object.assign(pools_v2, pools_v3))) {
+    // for (let pool of Object.values(pools_v2)) {
         // Check if both of the tokens of the pool are approved
         if (approvedTokens[pool.token0] && approvedTokens[pool.token1]) {
             pools[pool.address] = pool;
@@ -325,9 +324,9 @@ async function main() {
                         };
 
                         // Send arbitrage transaction
-                        let tx = await tradeContract.execute(initialAction, overrides);
-                        logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
-                        lastTxCount++;
+                        // let tx = await tradeContract.execute(initialAction, overrides);
+                        // logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
+                        // lastTxCount++;
 
                         // Do not wait for the transaction to be mined, so that we don't skip any blocks
                     } catch (e) {
