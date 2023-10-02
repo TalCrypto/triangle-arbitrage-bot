@@ -46,36 +46,79 @@ async function estimateNextBlockGas() {
 
 // Find pools that were updated in the given block
 async function findUpdatedPools(provider, blockNumber, pools) {
-    // Selectors for events that update reserves in a Uniswap V2/V3 pool
-    const eventSelectors = {
-        V2Sync: ethers.utils.id('Sync(uint112,uint112)'), // [uint112 reserve0, uint112 reserve1]
-        V3Mint: ethers.utils.id('Mint(address,address,int24,int24,uint128,uint256,uint256)'), // [address sender, address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint128 amount0, uint128 amount1]
-        V3Burn: ethers.utils.id('Burn(address,address,int24,int24,uint128,uint256,uint256)'), // [address sender, address owner, int24 tickLower, int24 tickUpper, uint128 amount, uint128 amount0, uint128 amount1]
-        V3Swap: ethers.utils.id('Swap(address,address,int256,int256,uint160,uint128,int24)'), // [address sender, address recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick]
-        // V3Flash: ethers.utils.id('Flash(address,address,uint256,uint256,uint256,uint256)'), // [address sender, address recipient, uint256 amount0, uint256 amount1, uint256 paid0, uint256 paid1]
-        // V3Collect: ethers.utils.id('Collect(address,int24,int24,uint128,uint128)'), // [address sender, int24 tickLower, int24 tickUpper, uint128 amount0, uint128 amount1]
+    // Interfaces for the events we are interested in.
+    const interfaces = [
+        new ethers.utils.Interface(['event Sync(uint112 reserve0, uint112 reserve1)']),
+        new ethers.utils.Interface(['event Mint(address indexed sender, uint256 amount0, uint256 amount1)']),
+        new ethers.utils.Interface(['event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)']),
+        new ethers.utils.Interface(['event Swap(address indexed sender, int256 amount0, int256 amount1, uint160 sqrtPriceX96, address indexed to)']),
+        // new ethers.utils.Interface(['event Flash(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)']),
+        // new ethers.utils.Interface(['event Collect(address indexed sender, uint256 amount0, uint256 amount1)']),
+    ];
+
+    // Used to print the DEX version associated with each event.
+    const interfaceVersion = {
+        "Sync": "V2",
+        "Mint": "V3",
+        "Burn": "V3",
+        "Swap": "V3",
+        // "Flash": "V3",
+        // "Collect": "V3",
     }
 
-    const filters = [];
-    for (const [key, value] of Object.entries(eventSelectors)) {
-        filters.push({
+    const logPromises = [];
+    const parsedResults = [];
+    // For each filter, async get the logs, and parse them according to the ABI interface.
+    for (let iface of interfaces) {
+        // Initiate the promise
+        let prom = provider.getLogs({
             fromBlock: blockNumber,
             toBlock: blockNumber,
-            topics: [value],
+            topics: [
+                iface.getEventTopic(Object.values(iface.events)[0]),
+            ],
         });
+
+        // After the promise returns, parse the data.
+        prom.then((logs) => {
+            logger.info("Found", logs.length, "logs for", Object.values(iface.events)[0].name);
+            for (const log of logs) {
+                parsedResults.push({
+                    // Forward the raw log
+                    log: log,
+                    // Copy the interface object
+                    interface: Object.assign({}, iface),
+                    // Parse the log data
+                    // parsed: iface.parseLog(log)
+                });
+            }
+        });
+
+        // Add the promise to the list.
+        logPromises.push(prom);
     }
 
-    // Use promise.all to get all logs in parallel for each filter
-    let filterLogs = await Promise.all(filters.map(filter => provider.getLogs(filter)));
+    // Wait for the promises to resolve
+    await Promise.all(logPromises);
     
     // Get unique pool addresses from logs
     let logCount = 0;
     let poolAddresses = [];
-    for (const logs of filterLogs) {
-        for (const log of logs) {
-            poolAddresses.push(log.address);
-            logCount++;
-        }
+    for (const resLog of parsedResults) {
+        const iface = resLog.interface;
+        const name = Object.values(iface.events)[0].name;
+        logger.info(`Found event ${name} (${interfaceVersion[name]}) in block ${blockNumber}. Pool address: ${resLog.log.address}`);
+        poolAddresses.push(resLog.log.address);
+
+        // const logs = resLog.parsed.args;
+        // Logs is array-like with some named members. Print only the named members. (both key and value).
+        // for (const [key, value] of Object.entries(logs)) {
+        //     if (isNaN(key)){
+        //         logger.info(key, value);
+        //     }
+        // }
+        
+        logCount++;
     }
     logger.info(`Found ${logCount} DEX (V2, V3) logs in block ${blockNumber}`);
 
