@@ -1,7 +1,7 @@
 # Cached data for the bot
 *.csv
 *.txt
-data
+data/*.log
 *.zip
 *.png
 cache
