@@ -124,15 +124,15 @@ function clipBigInt(num, precision) {
 }
 
 // Display bot stats
-function displayStats(sessionStart, logger, approvedTokens, dataStore, profitStore){
+function displayStats(sessionStart, logger, tokens, dataStore, profitStore){
     logger.info("===== Profit Recap =====")
     let sessionDuration = (new Date() - sessionStart) / 1000;
     logger.info(`Session duration: ${sessionDuration} seconds (${sessionDuration / 60} minutes) (${sessionDuration / 60 / 60} hours)`);
     
     // For each token, display the profit in decimals
     for (let token in profitStore) {
-        let profit = Number(profitStore[token]) / 10**approvedTokens[token].decimals;
-        logger.info(`${approvedTokens[token].symbol}: ${profit} $${profit*approvedTokens[token].usd} (${token})`);
+        let profit = Number(profitStore[token]) / 10**tokens[token].decimals;
+        logger.info(`${tokens[token].symbol}: ${profit} $${profit*tokens[token].usd} (${token})`);
     }
     logger.info("========================")
 
