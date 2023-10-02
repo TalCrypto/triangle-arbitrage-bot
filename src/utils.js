@@ -49,9 +49,9 @@ async function findUpdatedPools(provider, blockNumber, pools) {
     // Interfaces for the events we are interested in.
     const interfaces = [
         new ethers.utils.Interface(['event Sync(uint112 reserve0, uint112 reserve1)']),
-        new ethers.utils.Interface(['event Mint(address indexed sender, uint256 amount0, uint256 amount1)']),
-        new ethers.utils.Interface(['event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)']),
-        new ethers.utils.Interface(['event Swap(address indexed sender, int256 amount0, int256 amount1, uint160 sqrtPriceX96, address indexed to)']),
+        new ethers.utils.Interface(['event Mint(address sender, address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)']),
+        new ethers.utils.Interface(['event Burn(address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)']),
+        new ethers.utils.Interface(['event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)']),
         // new ethers.utils.Interface(['event Flash(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)']),
         // new ethers.utils.Interface(['event Collect(address indexed sender, uint256 amount0, uint256 amount1)']),
     ];
@@ -81,7 +81,7 @@ async function findUpdatedPools(provider, blockNumber, pools) {
 
         // After the promise returns, parse the data.
         prom.then((logs) => {
-            logger.info("Found", logs.length, "logs for", Object.values(iface.events)[0].name);
+            logger.info(`Found ${logs.length} logs for ${Object.values(iface.events)[0].name} (${interfaceVersion[Object.values(iface.events)[0].name]}) in block ${blockNumber}`);
             for (const log of logs) {
                 parsedResults.push({
                     // Forward the raw log
