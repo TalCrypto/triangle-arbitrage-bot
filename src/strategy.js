@@ -137,10 +137,11 @@ async function main() {
     streamNewBlocks(WSS_URL, eventEmitter);
     eventEmitter.on('event', async (event) => {
         if (event.type == 'block') {
+            blockNumber = event.blockNumber;
+            let sblock = new Date();
+
             try {
-                let blockNumber = event.blockNumber;
                 logger.info(`=== New Block #${blockNumber}`);
-                sblock = new Date();
 
                 // Display profit every 30 blocks
                 if (blockNumber % 30 == 0) {
@@ -149,7 +150,7 @@ async function main() {
 
                 // Find pools that were updated in the last block
                 s = new Date();
-                let touchedPools = await findUpdatedPools(provider, blockNumber, pools);
+                let touchedPools = await findUpdatedPools(provider, blockNumber, pools, approvedTokens);
                 e = new Date();
                 dataStore.events.push(e - s);
                 logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
@@ -200,13 +201,14 @@ async function main() {
 
                 // Make sure that there are paths to evaluate.
                 if (touchedPaths.length == 0) {
-                    logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
+                    logger.info(`No touched paths, skipping block #${blockNumber}`);
                     return;
                 }
-
+                
                 // For each path, compute the optimal amountIn to trade, and the profit
                 s = new Date();
                 let profitablePaths = [];
+                logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
                 for (let path of touchedPaths) {
                     let amountIn = optimizeAmountIn(path);
                     if (amountIn === 0n) continue; // Grossly unprofitable
