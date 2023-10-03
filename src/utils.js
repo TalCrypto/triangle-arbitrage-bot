@@ -128,7 +128,6 @@ async function findUpdatedPools(provider, blockNumber, pools, tokens) {
             // Logs is array-like with some named members. Print only the named members. (both key and value).
             for (const [key, value] of Object.entries(logs)) {
                 if (isNaN(key)){
-                    logger.info(key, value);
                     strData += `${key}: ${value} `;
                 }
             }
