@@ -11,6 +11,8 @@ if (buildFlag == "-build" || buildFlag == "-b") {
     // - src/*
     // index.js
     // .env
+    // package.json
+    // package-lock.json
 
     // Create a new zip file
     const fs = require('fs');
@@ -31,6 +33,8 @@ if (buildFlag == "-build" || buildFlag == "-b") {
     // Add simple files to the zip
     archive.file('index.js');
     archive.file('.env');
+    archive.file('package.json');
+    archive.file('package-lock.json');
     archive.directory('abi', 'abi');
     archive.directory('src', 'src');
 
