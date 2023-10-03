@@ -118,6 +118,7 @@ async function main() {
     let lastGasPrice = await provider.getGasPrice();
     let lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
     let poolsToRefresh = Object.keys(pools); // Once the bot starts receiving blocks, we refresh gradually the reserves of every pool, ensuring that our profit math is always correct.
+    let hasRefreshed = false; // When flips to true, purge dataStore to get replace transient latency data with steady-state data.
     
     // Data collection //
     // Latency for various operations
@@ -189,7 +190,15 @@ async function main() {
                 // There are still some remaining pools to refresh. Will be done in the next block.
                 if (poolsToRefresh.length > 0) {
                     logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
+                    hasRefreshed = false;
                     return;
+                } else if (!hasRefreshed) {
+                    // We have refreshed all the pools (poolsToRefresh is empty), and we have not yet purged the dataStore.
+                    // Purge the dataStore, and set hasRefreshed to true.
+                    dataStore.events = [];
+                    dataStore.reserves = [];
+                    dataStore.block = [];
+                    hasRefreshed = true;
                 }
 
                 let elapsed = new Date() - sblock;
