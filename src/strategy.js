@@ -57,8 +57,8 @@ async function main() {
     // Merge v2 and v3 pools
     let pools = {};
     // DEBUG: Ignore V3 pools for now ////////////////////////////
-    for (let pool of Object.values(Object.assign(pools_v2, pools_v3))) {
-    // for (let pool of Object.values(pools_v2)) {
+    // for (let pool of Object.values(Object.assign(pools_v2, pools_v3))) {
+    for (let pool of Object.values(pools_v2)) {
         // Check if both of the tokens of the pool are approved
         if (approvedTokens[pool.token0] && approvedTokens[pool.token1]) {
             pools[pool.address] = pool;
