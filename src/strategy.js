@@ -280,7 +280,7 @@ async function main() {
                 }
                 
                 // Send arbitrage transaction
-                logger.info("!!!!!!!!!!!!! Sending arbitrage transaction...");
+                logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
                                     
                 // Create a signer
                 const signer = new ethers.Wallet(PRIVATE_KEY);
@@ -345,9 +345,9 @@ async function main() {
                 };
 
                 // Send arbitrage transaction
-                // let tx = await tradeContract.execute(initialAction, overrides);
-                // logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
-                // lastTxCount++;
+                let tx = await tradeContract.execute(initialAction, overrides);
+                logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
+                lastTxCount++;
 
                 // Do not wait for the transaction to be mined, so that we don't skip any blocks
             } catch (e) {
