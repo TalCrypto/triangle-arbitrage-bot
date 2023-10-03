@@ -45,7 +45,7 @@ async function estimateNextBlockGas() {
 }
 
 // Find pools that were updated in the given block
-async function findUpdatedPools(provider, blockNumber, pools) {
+async function findUpdatedPools(provider, blockNumber, pools, tokens) {
     // Interfaces for the events we are interested in.
     const interfaces = [
         new ethers.utils.Interface(['event Sync(uint112 reserve0, uint112 reserve1)']),
@@ -83,13 +83,23 @@ async function findUpdatedPools(provider, blockNumber, pools) {
         prom.then((logs) => {
             logger.info(`Found ${logs.length} logs for ${Object.values(iface.events)[0].name} (${interfaceVersion[Object.values(iface.events)[0].name]}) in block ${blockNumber}`);
             for (const log of logs) {
+
+                // Sometimes we match events that are not from the pools we are interested in. This raises an error.
+                let parsedData = {};
+                try {
+                    parsedData = iface.parseLog(log);
+                } catch (err) {
+                    logger.error(`Error parsing log ${log.transactionHash} in block ${blockNumber}: ${err}`);
+                    continue;
+                }
+
                 parsedResults.push({
                     // Forward the raw log
                     log: log,
                     // Copy the interface object
                     interface: Object.assign({}, iface),
                     // Parse the log data
-                    // parsed: iface.parseLog(log)
+                    parsed: parsedData,
                 });
             }
         });
@@ -100,32 +110,33 @@ async function findUpdatedPools(provider, blockNumber, pools) {
 
     // Wait for the promises to resolve
     await Promise.all(logPromises);
-    
+
     // Get unique pool addresses from logs
-    let logCount = 0;
     let poolAddresses = [];
     for (const resLog of parsedResults) {
+        // Check if the address involved is of a pool that we know about.
         const iface = resLog.interface;
-        const name = Object.values(iface.events)[0].name;
-        logger.info(`Found event ${name} (${interfaceVersion[name]}) in block ${blockNumber}. Pool address: ${resLog.log.address}`);
-        poolAddresses.push(resLog.log.address);
-
-        // const logs = resLog.parsed.args;
-        // Logs is array-like with some named members. Print only the named members. (both key and value).
-        // for (const [key, value] of Object.entries(logs)) {
-        //     if (isNaN(key)){
-        //         logger.info(key, value);
-        //     }
-        // }
-        
-        logCount++;
+        const eventName = Object.values(iface.events)[0].name;
+        let poolData = pools[resLog.log.address];
+        if (poolData && resLog.parsed) {
+            const symbol0 = tokens[poolData.token0].symbol;
+            const symbol1 = tokens[poolData.token1].symbol;
+            poolAddresses.push(resLog.log.address);
+            
+            let strData = "";
+            const logs = resLog.parsed.args;
+            // Logs is array-like with some named members. Print only the named members. (both key and value).
+            for (const [key, value] of Object.entries(logs)) {
+                if (isNaN(key)){
+                    logger.info(key, value);
+                    strData += `${key}: ${value} `;
+                }
+            }
+            logger.info(`Found event ${eventName} (${interfaceVersion[eventName]}) in block ${blockNumber} Pool address: ${resLog.log.address} Tokens: ${symbol0}/${symbol1} Data: ${strData}`);
+        } else {
+            logger.info(`Found event ${eventName} (${interfaceVersion[eventName]}) in block ${blockNumber} Pool address: ${resLog.log.address} Unknown pool.`);
+        }
     }
-    logger.info(`Found ${logCount} DEX (V2, V3) logs in block ${blockNumber}`);
-
-    // Ignore potential pools that are not already known (in the pools object).
-    poolAddresses = [...new Set(poolAddresses)]; // Remove duplicates
-    poolAddresses = poolAddresses.filter(poolAddress => pools[poolAddress]);
-    logger.info(`Found ${poolAddresses.length} pools in block ${blockNumber}`);
 
     return poolAddresses;
 }
