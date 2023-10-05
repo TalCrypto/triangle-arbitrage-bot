@@ -125,7 +125,7 @@ module.exports = {
     HTTPS_URL: process.env.HTTPS_URL,
     HTTPS2_URL: process.env.HTTPS2_URL,
     WSS_URL: process.env.WSS_URL,
-    CHAIN_ID: process.env.CHAIN_ID || 1,
+    CHAIN_ID: Number(process.env.CHAIN_ID) || 137,
     BLOCKNATIVE_TOKEN: process.env.BLOCKNATIVE_TOKEN,
     PRIVATE_KEY: process.env.PRIVATE_KEY,
     SIGNING_KEY: process.env.SIGNING_KEY,
@@ -159,4 +159,15 @@ module.exports = {
     // FlashQueryV3
     FLASH_QUERY_V3_ADDRESS: '0xa5aeC6cF29e66fD47F6a05dcc0c8aCD308d80B4E',
 
+    // List of low quality rpc endpoints that which we will propagate our transactions to.
+    TX_ENDPOINTS: [
+        'https://polygon-rpc.com/',
+        'https://matic-mainnet.chainstacklabs.com',
+        'https://rpc-mainnet.maticvigil.com',
+        'https://rpc-mainnet.matic.quiknode.pro',
+        'https://matic-mainnet-full-rpc.bwarelabs.com',
+        'https://polygon-bor.publicnode.com',
+        'https://polygon.meowrpc.com',
+        'https://polygon.drpc.org',
+    ],
 };
