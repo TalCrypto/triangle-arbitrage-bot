@@ -71,8 +71,7 @@ async function main() {
 
     // Fetch the reserves of all pools
     let s = new Date();
-    let blockNumber = await provider.getBlockNumber();
-    await batchReserves(provider, pools, [], 100, 10, blockNumber);
+    await batchReserves(provider, pools, [], 100, 10, await provider.getBlockNumber());
     let e = new Date();
     logger.info(`Batch reserves call took: ${(e - s) / 1000} seconds`);
 
@@ -129,6 +128,7 @@ async function main() {
         events: [], // Store the time in ms to read the events of blocks
         reserves: [], // Store the time in ms it took to read the reserves of pools
         block: [], // Store the total time in ms it took to process a block
+        tradeKeys: {}, // Store the (pool0, pool1, pool2) keys, identifying similar trades
     };
     // Opportunities found
     const profitStore = {}; // Store the profit of each root token
@@ -141,7 +141,7 @@ async function main() {
     streamNewBlocks(WSS_URL, eventEmitter);
     eventEmitter.on('event', async (event) => {
         if (event.type == 'block') {
-            blockNumber = event.blockNumber;
+            let blockNumber = event.blockNumber;
             let sblock = new Date();
 
             try {
@@ -189,27 +189,29 @@ async function main() {
                 }
 
                 // Update poolsToRefresh array
-                poolsToRefresh = poolsToRefresh.slice(N_REFRESH);
-                // There are still some remaining pools to refresh. Will be done in the next block.
-                if (poolsToRefresh.length > 0) {
-                    logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
-                    hasRefreshed = false;
-                    return;
-                } else if (!hasRefreshed) {
-                    // We have refreshed all the pools (poolsToRefresh is empty), and we have not yet purged the dataStore.
-                    // Purge the dataStore, and set hasRefreshed to true.
-                    dataStore.events = [];
-                    dataStore.reserves = [];
-                    dataStore.block = [];
-                    hasRefreshed = true;
-                }
+                logger.error(`DEBUG: Skipping poolsToRefresh update`);
+                // poolsToRefresh = poolsToRefresh.slice(N_REFRESH);
+                // // There are still some remaining pools to refresh. Will be done in the next block.
+                // if (poolsToRefresh.length > 0) {
+                //     logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
+                //     hasRefreshed = false;
+                //     return;
+                // } else if (!hasRefreshed) {
+                //     // We have refreshed all the pools (poolsToRefresh is empty), and we have not yet purged the dataStore.
+                //     // Purge the dataStore, and set hasRefreshed to true.
+                //     dataStore.events = [];
+                //     dataStore.reserves = [];
+                //     dataStore.block = [];
+                //     hasRefreshed = true;
+                // }
 
                 let elapsed = new Date() - sblock;
-                if (elapsed > 1000) {
-                    // If the time elapsed is > 1000ms, we skip the arbitrage transaction
-                    logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
-                    return;
-                }
+                logger.error(`DEBUG: Skipping elapsed time check`);
+                // if (elapsed > 1000) {
+                //     // If the time elapsed is > 1000ms, we skip the arbitrage transaction
+                //     logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
+                //     return;
+                // }
 
                 // Make sure that there are paths to evaluate.
                 if (touchedPaths.length == 0) {
@@ -250,11 +252,12 @@ async function main() {
                     return;
                 }
                 
-                if (path.profitusd < 0.02) {
-                    // Profit of the best path is too low, skip arbitrage transaction
-                    logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
-                    return;
-                }
+                logger.error(`DEBUG: Skipping profit check`);
+                // if (path.profitusd < 0.02) {
+                //     // Profit of the best path is too low, skip arbitrage transaction
+                //     logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
+                //     return;
+                // }
                 
                 // Display the profitable path
                 logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei)/10**SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
@@ -277,11 +280,12 @@ async function main() {
                 }
 
                 elapsed = new Date() - sblock;
-                if (elapsed > 1000) {
-                    // If the time elapsed is > 1000ms, we skip the arbitrage transaction
-                    logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
-                    return;
-                }
+                logger.error(`DEBUG: Skipping elapsed time check`);
+                // if (elapsed > 1000) {
+                //     // If the time elapsed is > 1000ms, we skip the arbitrage transaction
+                //     logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
+                //     return;
+                // }
                 
                 // Send arbitrage transaction
                 logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
@@ -341,33 +345,23 @@ async function main() {
                 const account = signer.connect(provider);
                 const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-                // Tx overrides
-                let overrides = {
-                    gasPrice: lastGasPrice.mul(125).div(100), // Add 10%
-                    gasLimit: 1000000, // 1M gas
-                    nonce: lastTxCount,
-                };
-
-                // Send arbitrage transaction
-                let tx = await tradeContract.execute(initialAction, overrides);
-                
                 // Use JSON-RPC instead of ethers.js to send the signed transaction
-                let tipPercent = 75; // 75%
-                let start = Date.now();
-                let txhash = await provider.send("eth_sendRawTransaction", [await signer.signTransaction({
-                    to: TRADE_CONTRACT_ADDRESS,
-                    data: tradeContract.interface.encodeFunctionData("execute", [initialAction]),
-                    type: 2,
-                    gasLimit: 1000000, // 1M gas
-                    maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
-                    maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
-                    nonce: lastTxCount,
-                    chainId: CHAIN_ID,
-                    value: 0,
-                })]);
-                logger.info(`Transaction sent in ${Date.now() - start}ms`);
-                logger.info(`tx hash: ${txhash}`);
-                lastTxCount++;
+                // let tipPercent = 75; // 75%
+                // let start = Date.now();
+                // let txhash = await provider.send("eth_sendRawTransaction", [await signer.signTransaction({
+                //     to: TRADE_CONTRACT_ADDRESS,
+                //     data: tradeContract.interface.encodeFunctionData("execute", [initialAction]),
+                //     type: 2,
+                //     gasLimit: 1000000, // 1M gas
+                //     maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
+                //     maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
+                //     nonce: lastTxCount,
+                //     chainId: CHAIN_ID,
+                //     value: 0,
+                // })]);
+                // logger.info(`Transaction sent in ${Date.now() - start}ms`);
+                // logger.info(`tx hash: ${txhash}`);
+                // lastTxCount++;
 
             } catch (e) {
                 logger.error(`Error while processing block #${blockNumber}: ${e}`);
