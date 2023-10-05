@@ -10,6 +10,8 @@ const {
     SENDER_ADDRESS,
     TRADE_CONTRACT_ADDRESS,
     SAFE_TOKENS,
+    CHAIN_ID,
+    TX_ENDPOINTS,
 } = require('./constants');
 const { logger } = require('./constants');
 const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSelectPaths } = require('./pools');
@@ -56,9 +58,10 @@ async function main() {
 
     // Merge v2 and v3 pools
     let pools = {};
-    // DEBUG: Ignore V3 pools for now ////////////////////////////
-    // for (let pool of Object.values(Object.assign(pools_v2, pools_v3))) {
-    for (let pool of Object.values(pools_v2)) {
+    // DEBUG: Ignore V3 pools for now 
+    // logger.info("DEBUG: Ignoring V3 pools");
+    // for (let pool of Object.values(pools_v2)) {
+    for (let pool of Object.values(Object.assign(pools_v2, pools_v3))) {
         // Check if both of the tokens of the pool are approved
         if (approvedTokens[pool.token0] && approvedTokens[pool.token1]) {
             pools[pool.address] = pool;
@@ -268,7 +271,8 @@ async function main() {
                     let amountIn = amountOut; // Previous amountOut value
                     amountOut = exactTokensOut(amountIn, pool, zfo);
                     // DEBUG: Clip to the millionth. To avoid tx fails due to rounding errors.
-                    amountOut = clipBigInt(amountOut, 6); // Maybe clip to the 7/8th ?
+                    // Should be removed since the V3 math is fixed now.
+                    // amountOut = clipBigInt(amountOut, 6); // Maybe clip to the 7/8th ?
                     path.amounts.push(amountOut.toString());
                 }
 
@@ -281,11 +285,6 @@ async function main() {
                 
                 // Send arbitrage transaction
                 logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
-                                    
-                // Create a signer
-                const signer = new ethers.Wallet(PRIVATE_KEY);
-                const account = signer.connect(provider);
-                const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
                 // Print info about the path/pools/token amounts
                 for (let i = 0; i < path.pools.length; i++) {
@@ -337,6 +336,11 @@ async function main() {
                         [path.pools[0].address, path.amounts[1], TRADE_CONTRACT_ADDRESS, path.directions[0], data1])
                 }; // Call pool0
 
+                // Create a signer
+                const signer = new ethers.Wallet(PRIVATE_KEY);
+                const account = signer.connect(provider);
+                const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
+
                 // Tx overrides
                 let overrides = {
                     gasPrice: lastGasPrice.mul(125).div(100), // Add 10%
@@ -346,31 +350,44 @@ async function main() {
 
                 // Send arbitrage transaction
                 let tx = await tradeContract.execute(initialAction, overrides);
-                logger.info(`Transaction sent. Transaction hash: ${tx.hash}`);
+                
+                // Use JSON-RPC instead of ethers.js to send the signed transaction
+                let tipPercent = 75; // 75%
+                let start = Date.now();
+                let txhash = await provider.send("eth_sendRawTransaction", [await signer.signTransaction({
+                    to: TRADE_CONTRACT_ADDRESS,
+                    data: tradeContract.interface.encodeFunctionData("execute", [initialAction]),
+                    type: 2,
+                    gasLimit: 1000000, // 1M gas
+                    maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
+                    maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
+                    nonce: lastTxCount,
+                    chainId: CHAIN_ID,
+                    value: 0,
+                })]);
+                logger.info(`Transaction sent in ${Date.now() - start}ms`);
+                logger.info(`tx hash: ${txhash}`);
                 lastTxCount++;
 
-                // Do not wait for the transaction to be mined, so that we don't skip any blocks
             } catch (e) {
                 logger.error(`Error while processing block #${blockNumber}: ${e}`);
             } finally {
-                let blockElapsed = new Date() - sblock;
-                if (blockElapsed < 1000) {
-                    try {
-                        // Block was processed quickly, we have time to fetch the gas price
-                        let pricePromise = provider.getGasPrice();
-                        let txPromise = provider.getTransactionCount(SENDER_ADDRESS);
-                        pricePromise.then((price) => {
-                            lastGasPrice = price;
-                        });
-                        txPromise.then((txCount) => {
-                            lastTxCount = txCount;
-                        });
-                        await Promise.all([pricePromise, txPromise]);
-
-                    } catch (e) {
-                        logger.error(`Error when fetching gasPrice/txCount: ${e} block #${blockNumber}`);
-                    }
+                try {
+                    // Block was processed quickly, we have time to fetch the gas price
+                    let pricePromise = provider.getGasPrice();
+                    let txPromise = provider.getTransactionCount(SENDER_ADDRESS);
+                    pricePromise.then((price) => {
+                        lastGasPrice = price;
+                    });
+                    txPromise.then((txCount) => {
+                        lastTxCount = txCount;
+                    });
+                    await Promise.all([pricePromise, txPromise]);
+                    logger.info(`Gas price: ${Number(lastGasPrice)/10**9} GWei, tx nonce count: ${lastTxCount}`);
+                } catch (e) {
+                    logger.error(`Error when fetching gasPrice/txCount: ${e} block #${blockNumber}`);
                 }
+                let blockElapsed = new Date() - sblock;
                 dataStore.block.push(blockElapsed);
                 logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
             }
