@@ -166,6 +166,9 @@ function exactTokensOut(amountIn, pool, zfo) {
             }
         } catch (e) {
             logger.error(`DEBUG: Error in Uniswap V3 math: ${e}`);
+            console.log("amountIn: ", amountIn);
+            console.log("pool: ", pool);
+            console.log("zfo: ", zfo);
             amountOut = 0n;
         }
     }
