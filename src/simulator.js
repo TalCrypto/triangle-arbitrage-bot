@@ -78,7 +78,7 @@ function getSqrtRatioAtTick(tick) {
 }
 
 // Get the current tick from the sqrtPriceX96 (greatest integer for which the ratio is less than or equal to sqrtPriceX96).
-function getTickAtSqrtRatio(sqrtPriceX96, roundDigits=3) {
+function getTickAtSqrtRatio(sqrtPriceX96) {
     // First, we know that sqrtPriceX96 = sqrt(1.0001**tick) * 2**96.
     // So sqrtPriceX96 / 2**96 = sqrt(1.0001**tick)
     // (sqrtPriceX96 / 2**96)**2 = 1.0001**tick
@@ -88,7 +88,7 @@ function getTickAtSqrtRatio(sqrtPriceX96, roundDigits=3) {
     // tick = 2*(log2(sqrtPriceX96) - 96) / log2(1.0001)
 
     let tick = 2 * (Math.log2(Number(sqrtPriceX96)) - 96) / Math.log2(1.0001);
-    tick = Math.floor(Math.round(tick*10**roundDigits)/10**roundDigits);
+    tick = Math.floor(tick);
 
     if (tick < -887272 || tick > 887272) {
         throw new Error('T: Price is out of bounds');
