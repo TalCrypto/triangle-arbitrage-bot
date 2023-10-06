@@ -269,6 +269,10 @@ async function main() {
                     let pool = path.pools[i];
                     let zfo = path.directions[i];
                     let amountIn = amountOut; // Previous amountOut value
+                    // Instead of clipping, we subtract 1 wei to the input amount.
+                    // This is done to avoid the off-by-one numeric error found in the tests.
+                    // (JS code predicts that we get amountOut from amountIn. In actually, we get amountOut when sending amountIn + 1 wei)
+                    amountIn = amountIn - 1n;
                     amountOut = exactTokensOut(amountIn, pool, zfo);
                     // DEBUG: Clip to the millionth. To avoid tx fails due to rounding errors.
                     // Should be removed since the V3 math is fixed now.
