@@ -16,13 +16,13 @@ const { loadAllPoolsFromV2, loadAllPoolsFromV3, keepPoolsWithLiquidity, extractP
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
-const { findUpdatedPools } = require('./utils');
+const { findUpdatedPools, clipBigInt, displayStats } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
 const tokens = require('./tokens');
 const fs = require('fs');
 
 // Use in combination with a local forked node synced at the target block:
-// anvil --fork-url https://polygon-mainnet.g.alchemy.com/v2/xxx --fork-block-number 48006705
+// anvil --fork-url https://polygon-mainnet.g.alchemy.com/v2/xxx --fork-block-number BN
 
 async function sendTx() {
     // Send arbitrage transaction
@@ -36,34 +36,35 @@ async function sendTx() {
     const account = signer.connect(provider);
     const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-    // Block number: 48006705
+    // Block number: 48368076
 
     // Pool addresses
-    let address0 = '0x1A6F6af2864b1f059A2E070140e373D6e3AAA2A1';
-    let address1 = '0x6CE2400ABd570b38eE2937D44521ee77773eA7e4';
-    let address2 = '0x4152ea409F10F7d6efDCa92149fDE430A8712b02';
+    let address0 = '0x7F567cE133B0B69458fC318af06Eee27642865be';
+    let address1 = '0x29BeA4A8C74Be114c23954c1390DA12A9539E864';
+    let address2 = '0xC3286373599dD5Af2A17a572eBb7561F05f88BEC';
 
     // Pool versions
-    let version0 = 2;
-    let version1 = 2;
-    let version2 = 2;
+    let version0 = 3;
+    let version1 = 3;
+    let version2 = 3;
 
     // Pool zeroForOne directions
-    let zfo0 = false;
-    let zfo1 = true;
+    let zfo0 = true;
+    let zfo1 = false;
     let zfo2 = true;
 
     // Token addresses
-    let token0 = '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
-    let token1 = '0x204820B6e6FEae805e376D2C6837446186e57981';
-    let token2 = '0x7Ecb5699D8E0a6572E549Dc86dDe5A785B8c29BC';
+    let token0 = '0x94Ab9E4553fFb839431E37CC79ba8905f45BfBeA';
+    let token1 = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1';
+    let token2 = '0x0308a3a9c433256aD7eF24dBEF9c49C8cb01300A';
 
     // Amounts:
+    amountOut = clipBigInt(amountOut, 6); // Maybe clip to the 7/8th ?
     let amountArray = [
-        "21586",
-        "12723444981068115933",
-        "3980637485678051984410",
-        "22230"
+        "88276911",
+        "13672620000000",
+        "486051200000000",
+        "127190"
     ];
 
     // Token amounts involved
@@ -115,18 +116,33 @@ async function sendTx() {
     console.log(`initialAction data: ${initialAction.rawData}`)
 
     // Fetch current gas price
-    let lastGasPrice = await provider.getGasPrice();
-    console.log("gasPrice", lastGasPrice);
+    let gasPrice = await provider.getGasPrice();
+    console.log("gasPrice", gasPrice);
 
-    // Tx overrides
-    let overrides = {
-        gasPrice: lastGasPrice.mul(110).div(100), // Add 10%
-        gasLimit: 1000000, // 1M gas
-    };
+    // Fetch current nonce
+    let nonce = await provider.getTransactionCount(signer.address);
+    console.log("nonce", nonce);
 
     // Run execute() function
+    let start = Date.now();
+    let overrides = {
+        gasPrice: gasPrice.mul(125).div(100), // Add 10%
+        gasLimit: 1000000, // 1M gas
+        nonce: nonce,
+    };
     let tx = await tradeContract.execute(initialAction, overrides);
-    console.log(`tx hash: ${tx.hash}`);
+
+    // Use direct json-rpc call instead, to send the signed transaction
+    // let tx = await provider.send("eth_sendRawTransaction", [await signer.signTransaction({
+    //     to: TRADE_CONTRACT_ADDRESS,
+    //     data: tradeContract.interface.encodeFunctionData("execute", [initialAction]),
+    //     gasPrice: gasPrice.mul(125).div(100), // Add 10%
+    //     gasLimit: 1000000, // 1M gas
+    //     nonce: nonce,
+    // })]);
+    // console.log(`tx hash: ${tx.hash}`);
+    console.log(`Transaction sent in ${Date.now() - start}ms`);
+    console.log("tx", tx);
 
     // Wait for the transaction to be mined
     tx.wait().then((receipt) => {
@@ -137,8 +153,50 @@ async function sendTx() {
         }
     });
 
-    // Check the balance of the account
-    
 }
 
-sendTx();
+function test(){
+    
+    let pool0 = {
+        version: 3,
+        address: '0x7F567cE133B0B69458fC318af06Eee27642865be',
+        token0: '0x94Ab9E4553fFb839431E37CC79ba8905f45BfBeA',
+        token1: '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1',
+        extra: {
+            fee: 5,//in bps
+            tickSpacing: 10,
+            liquidity: 1653250242535099755n,
+            sqrtPriceX96: 1959647542012149644571046656372452n,
+        }
+    };
+
+    let inAmount = 3309741n;
+    let zfo = true;
+    let outAmount = exactTokensOut(inAmount, pool0, zfo);
+    console.log(`outAmount: ${outAmount}`);
+    // 3309741=2023827782983463 (repay 3309742)
+    // 3309742=2023828394459613 (repay 3309743)
+
+    
+    let pool1 = {
+        version: 2,
+        address: '0x40A8772A6C917569d28A136A458E3051B96b4AC3',
+        token0: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
+        token1: '0xe118e8b6dc166CD83695825eB1d30e792435Bb00',
+        extra: {
+            fee: 30,//in bps
+            reserve0: 104055071036826676n,
+            reserve1: 11389559353915257381981n,
+        }
+    };
+
+    inAmount = 2023827782983462n;
+    zfo = true;
+    outAmount = exactTokensOut(inAmount, pool0, zfo);
+    console.log(`outAmount: ${outAmount}`);
+    // 2023827782983463=18361760677374910369
+
+}
+
+// sendTx();
+test();

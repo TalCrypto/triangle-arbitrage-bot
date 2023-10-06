@@ -96,7 +96,29 @@ contract Arbitrage is Script, StdCheats {
     }
 
     // Swap tokens through a Uniswap V2 pool
-    function swapV2(address pool, address tokenIn, uint amountIn, bool zeroForOne) internal returns (uint){
+    function swapV2(address pool, bool zeroForOne, uint amountOut) internal returns (uint){
+        // Get the output token
+        address tokenOut = zeroForOne ? IUniswapV2Pair(pool).token1() : IUniswapV2Pair(pool).token0();
+
+        // Get the initial balance of the output token
+        uint256 initialBalance = IERC20(tokenOut).balanceOf(address(this));
+
+        // Swap tokens. Empty data field
+        bytes memory data = "";
+        if (zeroForOne){
+            IUniswapV2Pair(pool).swap(0, amountOut, address(this), data);
+        } else {
+            IUniswapV2Pair(pool).swap(amountOut, 0, address(this), data);
+        }
+
+        // Display current tokenOut balance
+        uint delta = IERC20(tokenOut).balanceOf(address(this)) - initialBalance;
+
+        return delta;
+    }
+
+    // Swap tokens through a Uniswap V2 pool
+    function swapV2In(address pool, bool zeroForOne, uint amountIn) internal returns (uint){
         // Get the output token
         address tokenOut = zeroForOne ? IUniswapV2Pair(pool).token1() : IUniswapV2Pair(pool).token0();
 
@@ -124,6 +146,41 @@ contract Arbitrage is Script, StdCheats {
 
     // Swap tokens through a Uniswap V3 pool
     function swapV3(
+        address pool,
+        bool zeroForOne,
+        uint amountOut
+    ) internal returns (uint) {
+
+        // Setup the correct sqrtPriceLimit
+        uint160 sqrtPriceLimitX96 = 0x110000000;
+        uint160 zfo = zeroForOne ? 0 : 1455792646560079078679451688838485039105838153728;
+        sqrtPriceLimitX96 += zfo;
+
+        // Find out tokenIn/Out from the zeroForOne boolean
+        address tokenIn = zeroForOne ? IUniswapV3Pool(pool).token0() : IUniswapV3Pool(pool).token1();
+        address tokenOut = zeroForOne ? IUniswapV3Pool(pool).token1() : IUniswapV3Pool(pool).token0();
+
+        // Read balance before swap
+        uint initialBalance = IERC20(tokenOut).balanceOf(address(this));
+
+        // Build the data bytes
+        bytes memory data = abi.encode(tokenIn);
+
+        IUniswapV3Pool(pool).swap(
+            address(this),
+            zeroForOne,
+            -int(amountOut),
+            sqrtPriceLimitX96,
+            data
+        );
+
+        // Return balance delta
+        uint delta = IERC20(tokenOut).balanceOf(address(this)) - initialBalance;
+        return delta;
+    }
+
+    // Version using amountIn instead of amountOut
+    function swapV3In(
         address pool,
         bool zeroForOne,
         uint amountIn
@@ -186,48 +243,47 @@ contract Arbitrage is Script, StdCheats {
 
         // Pool 1
         console.log("#### Pool 1 ####");
-        uint amountIn = 3957993;
+        uint amountIn = 3309742;
+        uint amountOut = 2023827782983463;
         address tokenIn = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
         bool zeroForOne = true;
         // Deal input tokens, send them to the pool
         deal(tokenIn, address(this), amountIn);
         uint tokenBalance = IERC20(tokenIn).balanceOf(address(this));
         console.log("TokenIn balance before swap: ", tokenBalance);
-        // IERC20(tokenIn).transfer(pool1, amountIn);
-        // uint amountOut = swapV2(pool1, tokenIn, amountIn, zeroForOne);
-        uint amountOut = swapV3(pool1, zeroForOne, amountIn);
-        console.log("TokenOut received: ", amountOut); // 2446484739300292
-        // 2446484739300292 actual
-        // 2446484741464768 expected js
-        // 2446485355983706 expected py
-        // 2446484000000000 clipped js
+        amountOut = swapV3(pool1, zeroForOne, amountOut);
+        // amountOut = swapV3In(pool1, zeroForOne, amountIn);
+        tokenBalance = IERC20(tokenIn).balanceOf(address(this));
+        console.log("TokenIn balance after swap: ", tokenBalance);
+        console.log("TokenOut received: ", amountOut);
+        // rec: 2023827782983463
+
 
         // Pool 2
         console.log("#### Pool 2 ####");
-        // amountIn = 2446484000000000;
-        amountIn = 2446484739300292;
+        amountIn = 18361760677374910369;
         tokenIn = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
         zeroForOne = true;
         tokenBalance = IERC20(tokenIn).balanceOf(address(this));
         console.log("TokenIn balance: ", tokenBalance);
         IERC20(tokenIn).transfer(pool2, amountIn);
-        uint amountOut2 = swapV2(pool2, tokenIn, amountIn, zeroForOne);
-        console.log("TokenOut received: ", amountOut2); // 221736591346427676452
-        // 221736591346427676452 actual
-        // 260866578054620795825
-        // 260866655305567282352 expected js
+        uint amountOut2 = swapV2In(pool2, zeroForOne, amountIn);
+        console.log("TokenOut received: ", amountOut2);
+        // rec: 
 
+        revert("ok");
+        // Pool 3
+        console.log("#### Pool 3 ####");
+        amountIn = 486065157633526;
+        amountOut = 127193;
+        tokenIn = 0x831753DD7087CaC61aB5644b308642cc1c33Dc13;
+        zeroForOne = false;
+        tokenBalance = IERC20(tokenIn).balanceOf(address(this));
+        console.log("TokenIn balance: ", tokenBalance);
+        // uint amountOut3 = swapV3(pool3, zeroForOne, amountOut);
+        uint amountOut3 = swapV3In(pool3, zeroForOne, amountIn);
+        console.log("TokenOut received: ", amountOut3);
 
-        // // Pool 3
-        // console.log("#### Pool 3 ####");
-        // amountIn = 3980637485678051984410;
-        // tokenIn = 0x7Ecb5699D8E0a6572E549Dc86dDe5A785B8c29BC;
-        // zeroForOne = true;
-        // tokenBalance = IERC20(tokenIn).balanceOf(address(this));
-        // console.log("TokenIn balance: ", tokenBalance);
-        // IERC20(tokenIn).transfer(pool3, amountIn);
-        // uint amountOut3 = swapV2(pool3, tokenIn, amountIn, zeroForOne);
-        // console.log("TokenOut received: ", amountOut3);
-
+        revert("ok");
     }
 }
