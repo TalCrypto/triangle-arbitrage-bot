@@ -20,12 +20,14 @@ const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { findUpdatedPools, clipBigInt, displayStats } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
+const { buildTx } = require('./bundler');
 const fs = require('fs');
 const path = require('path');
 
 async function main() {
     logger.info("Program started");
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
+    const providers = TX_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
     const providerReserves = new ethers.providers.JsonRpcProvider(HTTPS2_URL);
     const factoryAddresses_v2 = [
         '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', // QuickSwap
@@ -262,83 +264,21 @@ async function main() {
                 // Store profit in profitStore
                 profitStore[path.rootToken] += path.profitwei
                 
-                // Display info about the path. Prepare the parameters
-                path.amounts = [path.amountIn.toString()];
-                let amountOut = path.amountIn;
-                for (let i = 0; i < path.pools.length; i++) {
-                    let pool = path.pools[i];
-                    let zfo = path.directions[i];
-                    let amountIn = amountOut; // Previous amountOut value
-                    // Instead of clipping, we subtract 1 wei to the input amount.
-                    // This is done to avoid the off-by-one numeric error found in the tests.
-                    // (JS code predicts that we get amountOut from amountIn. In actually, we get amountOut when sending amountIn + 1 wei)
-                    amountIn = amountIn - 1n;
-                    amountOut = exactTokensOut(amountIn, pool, zfo);
-                    // DEBUG: Clip to the millionth. To avoid tx fails due to rounding errors.
-                    // Should be removed since the V3 math is fixed now.
-                    // amountOut = clipBigInt(amountOut, 6); // Maybe clip to the 7/8th ?
-                    path.amounts.push(amountOut.toString());
-                }
-
                 elapsed = new Date() - sblock;
                 if (elapsed > 1000) {
                     // If the time elapsed is > 1000ms, we skip the arbitrage transaction
                     logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
                     return;
                 }
-                
-                // Send arbitrage transaction
-                logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
 
-                // Print info about the path/pools/token amounts
-                for (let i = 0; i < path.pools.length; i++) {
-                    let pool = path.pools[i];
-                    let zfo = path.directions[i];
-                    let tin = zfo ? pool.token0 : pool.token1;
-                    let tout = zfo ? pool.token1 : pool.token0;
-                    if (pool.version == 2) {
-                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} r0:${pool.extra.reserve0} r1:${pool.extra.reserve1}`);
-                    } else if (pool.version == 3) {
-                        logger.info(`pool v:${pool.version} a:${pool.address} z:${zfo} tin:${tin} (${approvedTokens[tin].symbol}) tout:${tout} (${approvedTokens[tout].symbol}) in:${path.amounts[i]} out:${path.amounts[i+1]} s:${pool.extra.sqrtPriceX96} l:${pool.extra.liquidity}`);
-                    }
+                // Check if the trade has 3 pools (2 pools not yet implemented)
+                if (path.pools.length != 3) {
+                    logger.info(`Path has ${path.pools.length} pools, skipping block #${blockNumber}`);
+                    return;
                 }
 
-                // Set up the callback data for each step of the arbitrage path. Start from the last step.
-                let data3 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], 
-                [
-                    [ 
-                        0, // Specify a 'token transfer' action
-                        ethers.utils.hexlify([]) 
-                    ],
-                    path.directions[2] ? path.pools[2].token0 : path.pools[2].token1, // token2
-                    path.amounts[2]
-                ]); // Repay pool2
-
-                let data2 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [ 
-                    [
-                        path.pools[2].version, // pool2 version (2 or 3)
-                        ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[2].address, path.amounts[3], TRADE_CONTRACT_ADDRESS, path.directions[2], data3])
-                    ], // Call pool2
-                    path.directions[1] ? path.pools[1].token0 : path.pools[1].token1, // token1
-                    path.amounts[1]
-                ]); // Repay pool1
-
-                // In the callback of pool0, call pool1 and repay path.amounts[0] to pool0
-                let data1 = ethers.utils.defaultAbiCoder.encode(['tuple(uint, bytes)', 'address', 'uint'], [
-                    [
-                        path.pools[1].version, // pool1 version (2 or 3)
-                        ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ], [path.pools[1].address, path.amounts[2], TRADE_CONTRACT_ADDRESS, path.directions[1], data2])
-                    ], // Call pool1
-                    path.directions[0] ? path.pools[0].token0 : path.pools[0].token1, // token0
-                    path.amounts[0]
-                ]); // Repay pool0
-
-                // Action that triggers the chain. Starts with a call to pool0.
-                let initialAction = {
-                    actionType: path.pools[0].version, // pool0 version (2 or 3)
-                    rawData: ethers.utils.defaultAbiCoder.encode([ 'address', 'uint', 'address', 'bool', 'bytes' ],
-                        [path.pools[0].address, path.amounts[1], TRADE_CONTRACT_ADDRESS, path.directions[0], data1])
-                }; // Call pool0
+                // Send arbitrage transaction
+                logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
 
                 // Create a signer
                 const signer = new ethers.Wallet(PRIVATE_KEY);
@@ -348,19 +288,31 @@ async function main() {
                 // Use JSON-RPC instead of ethers.js to send the signed transaction
                 let tipPercent = 75; // 75%
                 let start = Date.now();
-                let txhash = await provider.send("eth_sendRawTransaction", [await signer.signTransaction({
-                    to: TRADE_CONTRACT_ADDRESS,
-                    data: tradeContract.interface.encodeFunctionData("execute", [initialAction]),
-                    type: 2,
-                    gasLimit: 1000000, // 1M gas
-                    maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
-                    maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
-                    nonce: lastTxCount,
-                    chainId: CHAIN_ID,
-                    value: 0,
-                })]);
-                logger.info(`Transaction sent in ${Date.now() - start}ms`);
+                let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
+
+                // Send the transaction
+                let txhash = await provider.send("eth_sendRawTransaction", txObject);
                 logger.info(`tx hash: ${txhash}`);
+
+                // Send the transaction to all the endpoints.
+                let successCount = 0;
+                let failedEndpoints = [];
+                let promises = providers.map((pvdr, index) => {
+                    return pvdr.send("eth_sendRawTransaction", txObject)
+                        .then(() => {
+                            successCount++;
+                        })
+                        .catch(error => {
+                            logger.error(`Error sending transaction for endpoint ${TX_ENDPOINTS[index]}: ${error}`);
+                            failedEndpoints.push(TX_ENDPOINTS[index]);
+                        });
+                });
+
+                // Wait for all the promises to resolve
+                await Promise.all(promises);
+                console.log(`Sent transaction to ${successCount} endpoints`);
+
+                logger.info(`Transaction sent in ${Date.now() - start}ms`);
                 lastTxCount++;
 
             } catch (e) {
