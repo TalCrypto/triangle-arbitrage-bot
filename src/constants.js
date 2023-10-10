@@ -174,5 +174,6 @@ module.exports = {
         'https://rpc.ankr.com/polygon',
         'https://polygon-mainnet.public.blastapi.io',
         'https://1rpc.io/matic',
+        'https://poly-rpc.gateway.pokt.network/',
     ],
 };
