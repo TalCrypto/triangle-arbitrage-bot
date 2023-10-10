@@ -26,9 +26,11 @@ const path = require('path');
 
 async function main() {
     logger.info("Program started");
+    const wss = new ethers.providers.WebSocketProvider(WSS_URL);
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
-    const providers = TX_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
     const providerReserves = new ethers.providers.JsonRpcProvider(HTTPS2_URL);
+    let providers = TX_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
+    providers = providers.concat([wss, provider, providerReserves]);
     const factoryAddresses_v2 = [
         '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', // QuickSwap
         '0xc35DADB65012eC5796536bD9864eD8773aBc74C4', // SushiSwap
@@ -291,30 +293,24 @@ async function main() {
             logger.info("DEBUG: Replacing TX with blank TX...")
             txObject = await buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, blockNumber+1);
 
-                // Send the transaction
-                let txhash = await provider.send("eth_sendRawTransaction", txObject);
-                logger.info(`tx hash: ${txhash}`);
-
-                // Send the transaction to all the endpoints.
-                let successCount = 0;
-                let failedEndpoints = [];
-                let promises = providers.map((pvdr, index) => {
-                    return pvdr.send("eth_sendRawTransaction", txObject)
-                        .then(() => {
-                            successCount++;
-                        })
-                        .catch(error => {
-                            logger.error(`Error sending transaction for endpoint ${TX_ENDPOINTS[index]}: ${error}`);
-                            failedEndpoints.push(TX_ENDPOINTS[index]);
-                        });
+            // Send the transaction
+            let promises = [];
+            let successCount = 0;
+            let failedEndpoints = [];
+            promises = promises.concat(providers.map((pvdr) => pvdr.send("eth_sendRawTransaction", txObject)));
+            promises.forEach((promise, index) => {
+                promise.then(() => {
+                    successCount++;
+                }).catch((e) => {
+                    failedEndpoints.push(TX_ENDPOINTS[index]);
+                    logger.error(`Error while sending to ${TX_ENDPOINTS[index]}: ${e}`);
                 });
+            });
 
-                // Wait for all the promises to resolve
-                await Promise.all(promises);
-                console.log(`Sent transaction to ${successCount} endpoints`);
-
-                logger.info(`Transaction sent in ${Date.now() - start}ms`);
-                lastTxCount++;
+            // Wait for all the promises to resolve
+            logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s after block #${blockNumber}`);
+            await Promise.all(promises);
+            logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
 
             } catch (e) {
                 logger.error(`Error while processing block #${blockNumber}: ${e}`);
