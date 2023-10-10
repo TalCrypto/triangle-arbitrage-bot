@@ -8,6 +8,7 @@ const { FlashbotsBundleProvider } = require('@flashbots/ethers-provider-bundle')
 const uuid = require('uuid');
 const { CHAIN_ID } = require('./constants');
 const { BOT_ABI, PRIVATE_RELAY } = require('./constants');
+const { exactTokensOut } = require('./simulator');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
@@ -188,6 +189,25 @@ class Bundler {
     }
 }
 
+async function buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, targetBlock) {
+    // Sends a transaction of a few wei to itself, to test the inclusion latency.
+
+    let obj = [await signer.signTransaction({
+        to: signer.address,
+        data: '0x',
+        type: 2,
+        gasLimit: 1000000, // 1M gas
+        maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
+        maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
+        nonce: lastTxCount,
+        chainId: CHAIN_ID,
+        value: targetBlock % 100, // Last 2 digits of targetBlock is the wei value.
+    })]
+
+    return obj;
+}
+
+
 async function buildTx(path, tradeContract, tokens, logger, signer, lastTxCount, lastGasPrice, tipPercent) {
     // Display info about the path. Prepare the parameters
     path.amounts = [path.amountIn.toString()];
@@ -278,4 +298,5 @@ module.exports = {
     Flashloan,
     ZERO_ADDRESS,
     buildTx,
+    buildBlankTx,
 };

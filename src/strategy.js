@@ -20,7 +20,7 @@ const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { findUpdatedPools, clipBigInt, displayStats } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
-const { buildTx } = require('./bundler');
+const { buildTx, buildBlankTx } = require('./bundler');
 const fs = require('fs');
 const path = require('path');
 
@@ -285,10 +285,11 @@ async function main() {
                 const account = signer.connect(provider);
                 const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-                // Use JSON-RPC instead of ethers.js to send the signed transaction
-                let tipPercent = 75; // 75%
-                let start = Date.now();
-                let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
+            let tipPercent = 200;
+            let start = Date.now();
+            let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
+            logger.info("DEBUG: Replacing TX with blank TX...")
+            txObject = await buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, blockNumber+1);
 
                 // Send the transaction
                 let txhash = await provider.send("eth_sendRawTransaction", txObject);
