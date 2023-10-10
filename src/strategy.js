@@ -143,8 +143,11 @@ async function main() {
 
     // Start listening to new blocks using websockets
     wss.on('block', async (blockNumber) => {
-        let sblock = new Date();
-        if (blockNumber <= lastBlockNumber) {
+        // Start of block timer
+        let sblock = new Date(); 
+
+        // Old block guard
+        if (blockNumber <= lastBlockNumber) { 
             // We have already processed this block, or an older one. Ignore it.
             logger.info(`Ignoring old block #${blockNumber} (latest block is #${lastBlockNumber})`);
             return;
@@ -152,6 +155,17 @@ async function main() {
             // We are currently processing the latest block
             lastBlockNumber = blockNumber;
         }
+
+        // Pre-fetch the gas price and tx count for the new block
+        let pricePromise = provider.getGasPrice();
+        pricePromise.then((price) => {
+            lastGasPrice = price;
+        });
+        let txPromise = provider.getTransactionCount(SENDER_ADDRESS);
+        txPromise.then((txCount) => {
+            lastTxCount = txCount;
+        });
+        
 
         try {
             logger.info(`=== New Block #${blockNumber}`);
@@ -285,6 +299,9 @@ async function main() {
                 logger.info(`Path has ${path.pools.length} pools, skipping block #${blockNumber}`);
                 return;
             }
+            
+            // The promises should have long resolved by now, grab the values.
+            await Promise.all([pricePromise, txPromise]);
 
             // Make sure that we are still working on the latest block
             if (blockNumber < lastBlockNumber) {
@@ -330,21 +347,6 @@ async function main() {
         } catch (e) {
             logger.error(`Error while processing block #${blockNumber}: ${e}`);
         } finally {
-            try {
-                // Block was processed quickly, we have time to fetch the gas price
-                let pricePromise = provider.getGasPrice();
-                let txPromise = provider.getTransactionCount(SENDER_ADDRESS);
-                pricePromise.then((price) => {
-                    lastGasPrice = price;
-                });
-                txPromise.then((txCount) => {
-                    lastTxCount = txCount;
-                });
-                await Promise.all([pricePromise, txPromise]);
-                logger.info(`Gas price: ${Number(lastGasPrice) / 10 ** 9} GWei, tx nonce count: ${lastTxCount}`);
-            } catch (e) {
-                logger.error(`Error when fetching gasPrice/txCount: ${e} block #${blockNumber}`);
-            }
             let blockElapsed = new Date() - sblock;
             dataStore.block.push(blockElapsed);
             logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
