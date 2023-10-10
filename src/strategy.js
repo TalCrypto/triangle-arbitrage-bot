@@ -140,13 +140,9 @@ async function main() {
         profitStore[token] = 0n;
     }
     
-    // Start listening to new blocks using websockets (TODO: measure latency)
-    let eventEmitter = new EventEmitter();
-    streamNewBlocks(WSS_URL, eventEmitter);
-    eventEmitter.on('event', async (event) => {
-        if (event.type == 'block') {
-            let blockNumber = event.blockNumber;
-            let sblock = new Date();
+    // Start listening to new blocks using websockets
+    wss.on('block', async (blockNumber) => {
+        let sblock = new Date();
 
             try {
                 logger.info(`=== New Block #${blockNumber}`);
