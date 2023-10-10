@@ -123,6 +123,7 @@ async function main() {
     let sessionStart = new Date();
     let lastGasPrice = await provider.getGasPrice();
     let lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
+    let lastBlockNumber = await provider.getBlockNumber(); // Used to abandon old blocks, when a new one is received.
     let poolsToRefresh = Object.keys(pools); // Once the bot starts receiving blocks, we refresh gradually the reserves of every pool, ensuring that our profit math is always correct.
     let hasRefreshed = false; // When flips to true, purge dataStore to get replace transient latency data with steady-state data.
     
@@ -143,6 +144,14 @@ async function main() {
     // Start listening to new blocks using websockets
     wss.on('block', async (blockNumber) => {
         let sblock = new Date();
+        if (blockNumber <= lastBlockNumber) {
+            // We have already processed this block, or an older one. Ignore it.
+            logger.info(`Ignoring old block #${blockNumber} (latest block is #${lastBlockNumber})`);
+            return;
+        } else {
+            // We are currently processing the latest block
+            lastBlockNumber = blockNumber;
+        }
 
             try {
                 logger.info(`=== New Block #${blockNumber}`);
@@ -159,20 +168,16 @@ async function main() {
                 dataStore.events.push(e - s);
                 logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
 
-                // Find paths that use the touched pools
-                const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
-                let touchedPaths = [];
-                for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
-                    if (pool in pathsByPool) {
-                        // Find the new paths, check if they are not already in touchedPaths
-                        let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION/touchedPools.length, 0.5);
-                        
-                        // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
-                        newPaths = newPaths.filter(path => !touchedPaths.includes(path));
-                        touchedPaths = touchedPaths.concat(newPaths);
-                    }
+                    touchedPaths = touchedPaths.concat(newPaths);
                 }
-                logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
+            }
+            logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
+
+            // Check if we are still working on the latest block
+            if (blockNumber < lastBlockNumber) {
+                logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
+                return;
+            }
 
                 // If there still are pools to refresh, process them. 
                 const N_REFRESH = 200;
@@ -211,19 +216,18 @@ async function main() {
                     return;
                 }
 
-                // Make sure that there are paths to evaluate.
-                if (touchedPaths.length == 0) {
-                    logger.info(`No touched paths, skipping block #${blockNumber}`);
-                    return;
-                }
-                
-                // For each path, compute the optimal amountIn to trade, and the profit
-                s = new Date();
-                let profitablePaths = [];
-                logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
-                for (let path of touchedPaths) {
-                    let amountIn = optimizeAmountIn(path);
-                    if (amountIn === 0n) continue; // Grossly unprofitable
+            // Make sure that there are paths to evaluate.
+            if (touchedPaths.length == 0) {
+                logger.info(`No touched paths, skipping block #${blockNumber}`);
+                return;
+            }
+
+            // Make sure that we are still working on the latest block
+            if (blockNumber < lastBlockNumber) {
+                logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
+                return;
+            }
+            
 
                     let profitwei = computeProfit(amountIn, path);
                     if (profitwei <= 0n) continue; // Unprofitable
@@ -269,11 +273,17 @@ async function main() {
                     return;
                 }
 
-                // Check if the trade has 3 pools (2 pools not yet implemented)
-                if (path.pools.length != 3) {
-                    logger.info(`Path has ${path.pools.length} pools, skipping block #${blockNumber}`);
-                    return;
-                }
+            // Check if the trade has 3 pools (2 pools not yet implemented)
+            if (path.pools.length != 3) {
+                logger.info(`Path has ${path.pools.length} pools, skipping block #${blockNumber}`);
+                return;
+            }
+
+            // Make sure that we are still working on the latest block
+            if (blockNumber < lastBlockNumber) {
+                logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
+                return;
+            }
 
                 // Send arbitrage transaction
                 logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
@@ -307,6 +317,7 @@ async function main() {
             logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s after block #${blockNumber}`);
             await Promise.all(promises);
             logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
+            lastTxCount++;
 
             } catch (e) {
                 logger.error(`Error while processing block #${blockNumber}: ${e}`);
