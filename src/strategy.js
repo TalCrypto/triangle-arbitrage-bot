@@ -50,7 +50,7 @@ async function main() {
     // pools_v3 = await loadAllPoolsFromV3(provider, factoryAddresses_v3);
     // fs.writeFileSync('data/v2_pools.json', JSON.stringify(pools_v2)); // Save v2 pools to file using fs
     // fs.writeFileSync('data/v3_pools.json', JSON.stringify(pools_v3)); // Save v3 pools to file using fs
-    
+
     // Read pools from file if pool_v2 and pool_v3 are empty
     if (!pools_v2 && !pools_v3) {
         logger.info("Loading pools from file...");
@@ -89,7 +89,7 @@ async function main() {
     // Load safe tokens, from which we will constitute the root of our arb paths
     const safeTokens = SAFE_TOKENS;
     logger.info(`Safe token count: ${Object.keys(safeTokens).length}`);
-    
+
     // Find paths of length 2,3 starting from each safe token.
     let paths = []
     s = new Date();
@@ -100,7 +100,7 @@ async function main() {
     }
     e = new Date();
     logger.info(`Built ${Object.keys(paths).length} paths in ${(e - s) / 1000} seconds`);
-    
+
     // // Load all paths from files (Will loose pool object reference. Make functions pure ??)
     // let pathsFiles = fs.readdirSync('data').filter(fn => fn.startsWith('paths_'));
     // paths = [];
@@ -118,7 +118,7 @@ async function main() {
     // Index the paths by the pools they use, for faster lookup. Sort the paths.
     let pathsByPool = indexPathsByPools(paths);
     logger.info(`Indexed paths by pool`);
-    
+
     // Start session timer, display profit every 30 blocks
     let sessionStart = new Date();
     let lastGasPrice = await provider.getGasPrice();
@@ -126,7 +126,7 @@ async function main() {
     let lastBlockNumber = await provider.getBlockNumber(); // Used to abandon old blocks, when a new one is received.
     let poolsToRefresh = Object.keys(pools); // Once the bot starts receiving blocks, we refresh gradually the reserves of every pool, ensuring that our profit math is always correct.
     let hasRefreshed = false; // When flips to true, purge dataStore to get replace transient latency data with steady-state data.
-    
+
     // Data collection //
     // Latency for various operations
     const dataStore = {
@@ -140,7 +140,7 @@ async function main() {
     for (let token in safeTokens) {
         profitStore[token] = 0n;
     }
-    
+
     // Start listening to new blocks using websockets
     wss.on('block', async (blockNumber) => {
         let sblock = new Date();
@@ -153,21 +153,31 @@ async function main() {
             lastBlockNumber = blockNumber;
         }
 
-            try {
-                logger.info(`=== New Block #${blockNumber}`);
+        try {
+            logger.info(`=== New Block #${blockNumber}`);
 
-                // Display profit every 30 blocks
-                if (blockNumber % 30 == 0) {
-                    displayStats(sessionStart, logger, safeTokens, dataStore, profitStore);
-                }
+            // Display profit every 30 blocks
+            if (blockNumber % 30 == 0) {
+                displayStats(sessionStart, logger, safeTokens, dataStore, profitStore);
+            }
 
-                // Find pools that were updated in the last block
-                s = new Date();
-                let touchedPools = await findUpdatedPools(provider, blockNumber, pools, approvedTokens);
-                e = new Date();
-                dataStore.events.push(e - s);
-                logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
+            // Find pools that were updated in the last block
+            s = new Date();
+            let touchedPools = await findUpdatedPools(provider, blockNumber, pools, approvedTokens);
+            e = new Date();
+            dataStore.events.push(e - s);
+            logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
 
+            // Find paths that use the touched pools
+            const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
+            let touchedPaths = [];
+            for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
+                if (pool in pathsByPool) {
+                    // Find the new paths, check if they are not already in touchedPaths
+                    let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION / touchedPools.length, 0.5);
+
+                    // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
+                    newPaths = newPaths.filter(path => !touchedPaths.includes(path));
                     touchedPaths = touchedPaths.concat(newPaths);
                 }
             }
@@ -179,42 +189,37 @@ async function main() {
                 return;
             }
 
-                // If there still are pools to refresh, process them. 
-                const N_REFRESH = 200;
-                // Append N_REFRESH pools and touched pools
-                let fetchPools = poolsToRefresh.slice(0, N_REFRESH);
-                fetchPools = fetchPools.concat(touchedPools);
-                if (fetchPools.length > 0) {
-                    logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
-                    s = new Date();
-                    await batchReserves(providerReserves, pools, fetchPools, 100, 5, blockNumber);
-                    e = new Date();
-                    dataStore.reserves.push(e - s);
-                    logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
-                }
+            // If there still are pools to refresh, process them. 
+            const N_REFRESH = 200;
+            // Append N_REFRESH pools and touched pools
+            let fetchPools = poolsToRefresh.slice(0, N_REFRESH);
+            fetchPools = fetchPools.concat(touchedPools);
+            if (fetchPools.length > 0) {
+                logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
+                s = new Date();
+                await batchReserves(provider, pools, fetchPools, 100, 5, blockNumber);
+                e = new Date();
+                dataStore.reserves.push(e - s);
+                logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
+            }
 
-                // Update poolsToRefresh array
-                poolsToRefresh = poolsToRefresh.slice(N_REFRESH);
-                // There are still some remaining pools to refresh. Will be done in the next block.
-                if (poolsToRefresh.length > 0) {
-                    logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
-                    hasRefreshed = false;
-                    return;
-                } else if (!hasRefreshed) {
-                    // We have refreshed all the pools (poolsToRefresh is empty), and we have not yet purged the dataStore.
-                    // Purge the dataStore, and set hasRefreshed to true.
-                    dataStore.events = [];
-                    dataStore.reserves = [];
-                    dataStore.block = [];
-                    hasRefreshed = true;
-                }
+            // Update poolsToRefresh array
+            poolsToRefresh = poolsToRefresh.slice(N_REFRESH);
+            // There are still some remaining pools to refresh. Will be done in the next block.
+            if (poolsToRefresh.length > 0) {
+                logger.info(`Remaining pools to refresh: ${poolsToRefresh.length}. Aborting block #${blockNumber}`);
+                hasRefreshed = false;
+                return;
+            } else if (!hasRefreshed) {
+                // We have refreshed all the pools (poolsToRefresh is empty), and we have not yet purged the dataStore.
+                // Purge the dataStore, and set hasRefreshed to true.
+                dataStore.events = [];
+                dataStore.reserves = [];
+                dataStore.block = [];
+                hasRefreshed = true;
+            }
 
-                let elapsed = new Date() - sblock;
-                if (elapsed > 1000) {
-                    // If the time elapsed is > 1000ms, we skip the arbitrage transaction
-                    logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
-                    return;
-                }
+            let elapsed = new Date() - sblock;
 
             // Make sure that there are paths to evaluate.
             if (touchedPaths.length == 0) {
@@ -227,51 +232,53 @@ async function main() {
                 logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
                 return;
             }
-            
 
-                    let profitwei = computeProfit(amountIn, path);
-                    if (profitwei <= 0n) continue; // Unprofitable
-                    let profitusd = safeTokens[path.rootToken].usd * Number(profitwei) / 10**safeTokens[path.rootToken].decimals;
+            // For each path, compute the optimal amountIn to trade, and the profit
+            s = new Date();
+            let profitablePaths = [];
+            logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
+            for (let path of touchedPaths) {
+                let amountIn = optimizeAmountIn(path);
+                if (amountIn === 0n) continue; // Grossly unprofitable
 
-                    // Store the profit and amountIn values
-                    path.amountIn = amountIn;
-                    path.profitwei = profitwei;
-                    path.profitusd = profitusd;
-                    
-                    profitablePaths.push(path);
-                }
-                
-                profitablePaths.sort((pathA, pathB) =>{
-                    return pathB.profitusd - pathA.profitusd;
-                });
-                const path = profitablePaths[0];
-                e = new Date();
-                logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
-                
-                if (profitablePaths.length == 0) {
-                    // No profitable paths, skip arbitrage transaction
-                    logger.info(`No profitable paths, skipping arbitrage transaction.`);
-                    return;
-                }
-                
-                if (path.profitusd < 0.02) {
-                    // Profit of the best path is too low, skip arbitrage transaction
-                    logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
-                    return;
-                }
-                
-                // Display the profitable path
-                logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei)/10**SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
+                let profitwei = computeProfit(amountIn, path);
+                if (profitwei <= 0n) continue; // Unprofitable
+                let profitusd = safeTokens[path.rootToken].usd * Number(profitwei) / 10 ** safeTokens[path.rootToken].decimals;
 
-                // Store profit in profitStore
-                profitStore[path.rootToken] += path.profitwei
-                
-                elapsed = new Date() - sblock;
-                if (elapsed > 1000) {
-                    // If the time elapsed is > 1000ms, we skip the arbitrage transaction
-                    logger.info(`Time margin too low (block elapsed = ${elapsed} ms), skipping block #${blockNumber}`);
-                    return;
-                }
+                // Store the profit and amountIn values
+                path.amountIn = amountIn;
+                path.profitwei = profitwei;
+                path.profitusd = profitusd;
+
+                profitablePaths.push(path);
+            }
+
+            profitablePaths.sort((pathA, pathB) => {
+                return pathB.profitusd - pathA.profitusd;
+            });
+            const path = profitablePaths[0];
+            e = new Date();
+            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
+
+            if (profitablePaths.length == 0) {
+                // No profitable paths, skip arbitrage transaction
+                logger.info(`No profitable paths, skipping arbitrage transaction.`);
+                return;
+            }
+
+            if (path.profitusd < 0.02) {
+                // Profit of the best path is too low, skip arbitrage transaction
+                logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
+                return;
+            }
+
+            // Display the profitable path
+            logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei) / 10 ** SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
+
+            // Store profit in profitStore
+            profitStore[path.rootToken] += path.profitwei
+
+            elapsed = new Date() - sblock;
 
             // Check if the trade has 3 pools (2 pools not yet implemented)
             if (path.pools.length != 3) {
@@ -285,19 +292,20 @@ async function main() {
                 return;
             }
 
-                // Send arbitrage transaction
-                logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
+            // Send arbitrage transaction
+            logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
 
-                // Create a signer
-                const signer = new ethers.Wallet(PRIVATE_KEY);
-                const account = signer.connect(provider);
-                const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
+            // Create a signer
+            const signer = new ethers.Wallet(PRIVATE_KEY);
+            const account = signer.connect(provider);
+            const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
+            // Use JSON-RPC instead of ethers.js to send the signed transaction
             let tipPercent = 200;
             let start = Date.now();
             let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
             logger.info("DEBUG: Replacing TX with blank TX...")
-            txObject = await buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, blockNumber+1);
+            txObject = await buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, blockNumber + 1);
 
             // Send the transaction
             let promises = [];
@@ -319,28 +327,27 @@ async function main() {
             logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
             lastTxCount++;
 
+        } catch (e) {
+            logger.error(`Error while processing block #${blockNumber}: ${e}`);
+        } finally {
+            try {
+                // Block was processed quickly, we have time to fetch the gas price
+                let pricePromise = provider.getGasPrice();
+                let txPromise = provider.getTransactionCount(SENDER_ADDRESS);
+                pricePromise.then((price) => {
+                    lastGasPrice = price;
+                });
+                txPromise.then((txCount) => {
+                    lastTxCount = txCount;
+                });
+                await Promise.all([pricePromise, txPromise]);
+                logger.info(`Gas price: ${Number(lastGasPrice) / 10 ** 9} GWei, tx nonce count: ${lastTxCount}`);
             } catch (e) {
-                logger.error(`Error while processing block #${blockNumber}: ${e}`);
-            } finally {
-                try {
-                    // Block was processed quickly, we have time to fetch the gas price
-                    let pricePromise = provider.getGasPrice();
-                    let txPromise = provider.getTransactionCount(SENDER_ADDRESS);
-                    pricePromise.then((price) => {
-                        lastGasPrice = price;
-                    });
-                    txPromise.then((txCount) => {
-                        lastTxCount = txCount;
-                    });
-                    await Promise.all([pricePromise, txPromise]);
-                    logger.info(`Gas price: ${Number(lastGasPrice)/10**9} GWei, tx nonce count: ${lastTxCount}`);
-                } catch (e) {
-                    logger.error(`Error when fetching gasPrice/txCount: ${e} block #${blockNumber}`);
-                }
-                let blockElapsed = new Date() - sblock;
-                dataStore.block.push(blockElapsed);
-                logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
+                logger.error(`Error when fetching gasPrice/txCount: ${e} block #${blockNumber}`);
             }
+            let blockElapsed = new Date() - sblock;
+            dataStore.block.push(blockElapsed);
+            logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
         }
     });
 }
