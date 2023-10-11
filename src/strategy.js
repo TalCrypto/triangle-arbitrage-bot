@@ -11,7 +11,7 @@ const {
     TRADE_CONTRACT_ADDRESS,
     SAFE_TOKENS,
     CHAIN_ID,
-    TX_ENDPOINTS,
+    HTTP_ENDPOINTS,
 } = require('./constants');
 const { logger } = require('./constants');
 const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSelectPaths } = require('./pools');
@@ -29,7 +29,7 @@ async function main() {
     const wss = new ethers.providers.WebSocketProvider(WSS_URL);
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
     const providerReserves = new ethers.providers.JsonRpcProvider(HTTPS2_URL);
-    let providers = TX_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
+    let providers = HTTP_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
     providers = providers.concat([wss, provider, providerReserves]);
     const factoryAddresses_v2 = [
         '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', // QuickSwap
@@ -333,8 +333,8 @@ async function main() {
                 promise.then(() => {
                     successCount++;
                 }).catch((e) => {
-                    failedEndpoints.push(TX_ENDPOINTS[index]);
-                    logger.error(`Error while sending to ${TX_ENDPOINTS[index]}: ${e}`);
+                    failedEndpoints.push(HTTP_ENDPOINTS[index]);
+                    logger.error(`Error while sending to ${HTTP_ENDPOINTS[index]}: ${e}`);
                 });
             });
 
