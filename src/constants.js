@@ -160,20 +160,33 @@ module.exports = {
     FLASH_QUERY_V3_ADDRESS: '0xa5aeC6cF29e66fD47F6a05dcc0c8aCD308d80B4E',
 
     // List of low quality rpc endpoints that which we will propagate our transactions to.
-    TX_ENDPOINTS: [
+    HTTP_ENDPOINTS: [
+        'https://matic.getblock.io/c532343e-d633-4146-a312-d852eeaaea04/mainnet/',
         'https://polygon-rpc.com/',
-        'https://matic-mainnet.chainstacklabs.com',
-        'https://rpc-mainnet.maticvigil.com',
         'https://rpc-mainnet.matic.quiknode.pro',
         'https://polygon-bor.publicnode.com',
         'https://polygon.meowrpc.com',
         'https://polygon.drpc.org',
         'https://polygon.llamarpc.com',
         'https://polygon.blockpi.network/v1/rpc/public',
-        'https://polygon.rpc.blxrbdn.com',
         'https://rpc.ankr.com/polygon',
         'https://polygon-mainnet.public.blastapi.io',
         'https://1rpc.io/matic',
         'https://poly-rpc.gateway.pokt.network/',
+        'https://polygon.publicnode.com',
+        'https://polygon.api.onfinality.io/public',
+        'https://polygon.rpc.blxrbdn.com',
+    ],
+
+    // List of websocket endpoints that we will use to listen for new blocks.
+    WSS_ENDPOINTS: [
+        'wss://matic.getblock.io/c532343e-d633-4146-a312-d852eeaaea04/mainnet/',
+        'wss://polygon-bor.publicnode.com',
+        'wss://polygon.drpc.org',
+        'wss://polygon.drpc.org/ws',
+        'wss://polygon.llamarpc.com',
+        'wss://rpc-mainnet.matic.quiknode.pro',
+        'wss://polygon.gateway.tenderly.co',
+        'wss://polygon.meowrpc.com/ws',
     ],
 };
