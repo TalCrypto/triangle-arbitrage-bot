@@ -56,7 +56,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     // For each block, for each provider, store the time it took to get the block
     let blockProviderTime = {};
     let providerBlockTime = {};
-    let providerRequestDuration = {};
+    let providerRequestDurations = {};
     let runningHttpProviderCount = 0;
     let runningWsProviderCount = 0;
 
@@ -96,10 +96,10 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
                     if(!blockProviderTime[blockNumber][providerUrl]) {
                         blockProviderTime[blockNumber][providerUrl] = tEnd;
                         providerBlockTime[providerUrl][blockNumber] = tEnd;
-                    if(!blockProviderTime[providerUrl]) {
-                        blockProviderTime[providerUrl] = tEnd;
-                        providerBlockTime[blockNumber] = tEnd;
-                        providerRequestDuration[providerUrl] = tEnd - tStart;
+                        if (!providerRequestDurations[providerUrl]) {
+                            providerRequestDurations[providerUrl] = [];
+                        }
+                        providerRequestDurations[providerUrl].push(tEnd - tStart);
 
                     } else if (blockProviderTime[blockNumber][providerUrl] > tEnd) {
                         console.log(`Error: Block regression detected ! Provider ${providerUrl} | Block ${blockNumber} | Time saved ${blockProviderTime[blockNumber][providerUrl]} | Time now ${tEnd}`);
@@ -227,6 +227,15 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
         console.log(percentiles);
 
 
+        // Print the average request duration for each provider
+        console.log("=== http providers request duration (eth_getBlockByNumber) ===")
+        // Use providerRequestDurations
+        for (const providerUrl of Object.keys(providerRequestDurations)) {
+            let avg = providerRequestDurations[providerUrl].reduce((a, b) => a + b, 0) / providerRequestDurations[providerUrl].length;
+            console.log(`Average request duration: ${Math.round(avg)} ms | Provider ${providerUrl}`);
+        }
+
+        console.log("====================================\n");
     }, 1000*10); // Print latency every 10 seconds
     
     probeHttpProviders(probeDuration);
