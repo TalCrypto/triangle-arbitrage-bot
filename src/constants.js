@@ -174,8 +174,9 @@ module.exports = {
         'https://1rpc.io/matic',
         'https://poly-rpc.gateway.pokt.network/',
         'https://polygon.publicnode.com',
-        'https://polygon.api.onfinality.io/public',
+        // 'https://polygon.api.onfinality.io/public',
         'https://polygon.rpc.blxrbdn.com',
+        // 'https://polygon.gateway.tenderly.co',
     ],
 
     // List of websocket endpoints that we will use to listen for new blocks.
@@ -186,7 +187,7 @@ module.exports = {
         'wss://polygon.drpc.org/ws',
         'wss://polygon.llamarpc.com',
         'wss://rpc-mainnet.matic.quiknode.pro',
-        'wss://polygon.gateway.tenderly.co',
+        // 'wss://polygon.gateway.tenderly.co',
         'wss://polygon.meowrpc.com/ws',
     ],
 };
