@@ -1,6 +1,9 @@
 // This script performs various measurements on the rpc endpoints.
 const ethers = require('ethers');
 const {
+    HTTPS_URL,
+    HTTPS2_URL,
+    WSS_URL,
     HTTP_ENDPOINTS,
     WSS_ENDPOINTS,
 } = require('./constants');
@@ -33,6 +36,9 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     }
 
     // Check if the rpc endpoints are working correctly
+    HTTP_ENDPOINTS.push(HTTPS_URL); // Merge with main RPCs. Find better interface
+    HTTP_ENDPOINTS.push(HTTPS2_URL);
+    WSS_ENDPOINTS.push(WSS_URL);
     let providers = HTTP_ENDPOINTS.concat(WSS_ENDPOINTS);
     console.log(`Checking if the ${providers.length} providers are working correctly...`);
     await Promise.all(providers.map(providerUrl => checkProvider(providerUrl)));
