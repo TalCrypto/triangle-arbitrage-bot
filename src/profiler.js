@@ -26,7 +26,16 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
             } else {
                 throw new Error(`Invalid URL format: ${providerUrl}`);
             }
-            await provider.getBlockNumber();
+            
+            let blockPromise = provider.getBlockNumber();
+            const timeOut = 2000;
+            let timeOutPromise = new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    reject(new Error(`Request timed out (${timeOut}ms).) for provider ${providerUrl}`));
+                }, timeOut);
+            });
+            await Promise.race([blockPromise, timeOutPromise]);
+            
             console.log(`${providerUrl} is working correctly.`);
             
         } catch (error) {
