@@ -60,15 +60,18 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     async function probeHttpProviders(probeDuration) {
         console.log(`Probing HTTP providers for ${probeDuration / 1000 / 60} minutes.`)
 
+        let P = 400; // Poll period in ms
+        // For 5 minutes, for each provider, every P (ms) get the block number
         for (const providerUrl of HTTPS_ENDPOINTS) {
             // Build a loop that runs for 5 minutes for each provider.
-            // Every 200ms, or everytime the request returns, whichever is longer, get the block number.
+            // Every P ms, or everytime the request returns, whichever is longer, get the block number.
+            // Adds P/2 ms of average latency, but ensures that the request is not sent too often.
             const provider = new ethers.providers.JsonRpcProvider(providerUrl);
 
             // Save the time before the loop starts
             const t0 = new Date().getTime();
 
-            // Use setTimeout to run the probe function every 200ms
+            // Use setTimeout to run the probe function every P ms
             const probeFunction = async () => {
                 const tStart = new Date().getTime();
 
@@ -103,16 +106,16 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
 
                     console.log(`Provider ${providerUrl} | Block ${blockNumber} | Time: ${tEnd - tStart}ms`);
 
-                    // If the request took less than 200ms, wait the remaining time, then call.
-                    if (tEnd - tStart < 200) {
-                        setTimeout(probeFunction, 200 - (tEnd - tStart));
+                    // If the request took less than P ms, wait the remaining time, then call.
+                    if (tEnd - tStart < P) {
+                        setTimeout(probeFunction, P - (tEnd - tStart));
                     } else {
                         probeFunction();
                     }
                 } catch (error) {
-                    // Failure. Wait full 200ms and call again.
+                    // Failure. Wait full P ms and call again.
                     console.log(`Provider ${providerUrl} is not working correctly. Error: ${error.message}`);
-                    setTimeout(probeFunction, 200);
+                    setTimeout(probeFunction, P);
                 }
             }
             
