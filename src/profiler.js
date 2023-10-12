@@ -4,7 +4,7 @@ const {
     HTTPS_URL,
     HTTPS2_URL,
     WSS_URL,
-    HTTP_ENDPOINTS,
+    HTTPS_ENDPOINTS,
     WSS_ENDPOINTS,
 } = require('./constants');
 
@@ -45,10 +45,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     }
 
     // Check if the rpc endpoints are working correctly
-    HTTP_ENDPOINTS.push(HTTPS_URL); // Merge with main RPCs. Find better interface
-    HTTP_ENDPOINTS.push(HTTPS2_URL);
-    WSS_ENDPOINTS.push(WSS_URL);
-    let providers = HTTP_ENDPOINTS.concat(WSS_ENDPOINTS);
+    let providers = HTTPS_ENDPOINTS.concat(WSS_ENDPOINTS);
     console.log(`Checking if the ${providers.length} providers are working correctly...`);
     await Promise.all(providers.map(providerUrl => checkProvider(providerUrl)));
     console.log("Done checking providers.");
@@ -63,8 +60,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     async function probeHttpProviders(probeDuration) {
         console.log(`Probing HTTP providers for ${probeDuration / 1000 / 60} minutes.`)
 
-        // For 5 minutes, for each provider, every 200ms get the block number
-        for (const providerUrl of HTTP_ENDPOINTS) {
+        for (const providerUrl of HTTPS_ENDPOINTS) {
             // Build a loop that runs for 5 minutes for each provider.
             // Every 200ms, or everytime the request returns, whichever is longer, get the block number.
             const provider = new ethers.providers.JsonRpcProvider(providerUrl);

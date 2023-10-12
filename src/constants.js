@@ -122,9 +122,6 @@ const SAFE_TOKENS = {
 
 module.exports = {
     // env variables
-    HTTPS_URL: process.env.HTTPS_URL,
-    HTTPS2_URL: process.env.HTTPS2_URL,
-    WSS_URL: process.env.WSS_URL,
     CHAIN_ID: Number(process.env.CHAIN_ID) || 137,
     BLOCKNATIVE_TOKEN: process.env.BLOCKNATIVE_TOKEN,
     PRIVATE_KEY: process.env.PRIVATE_KEY,
@@ -160,7 +157,10 @@ module.exports = {
     FLASH_QUERY_V3_ADDRESS: '0xa5aeC6cF29e66fD47F6a05dcc0c8aCD308d80B4E',
 
     // List of low quality rpc endpoints that which we will propagate our transactions to.
-    HTTP_ENDPOINTS: [
+    HTTPS_ENDPOINTS: [
+        'https://polygon-mainnet.g.alchemy.com/v2/KRAnq0xLYyvFY8t5uU6WvMzZ1dm9RIRD',
+        'https://polygon-mainnet.g.alchemy.com/v2/ByUcAAcyEb85qUvPoedtCgC7dXkNA9qh',
+        'https://holy-polished-sailboat.matic.discover.quiknode.pro/cfc050375844516de9567424bfea499dd78e2556',
         'https://matic.getblock.io/c532343e-d633-4146-a312-d852eeaaea04/mainnet/',
         'https://polygon-rpc.com/',
         'https://rpc-mainnet.matic.quiknode.pro',
@@ -174,20 +174,30 @@ module.exports = {
         'https://1rpc.io/matic',
         'https://poly-rpc.gateway.pokt.network/',
         'https://polygon.publicnode.com',
-        // 'https://polygon.api.onfinality.io/public',
         'https://polygon.rpc.blxrbdn.com',
-        // 'https://polygon.gateway.tenderly.co',
+        'https://lb.drpc.org/ogrpc?network=polygon&dkey=Ai9ewDXuCEYYo6hI7gnq2PuFTnjfaQAR7onvbrjxQOzW',
+        
+        // 'https://polygon.api.onfinality.io/public', // Too slow
+        // 'https://polygon.gateway.tenderly.co', // Strange error
     ],
 
     // List of websocket endpoints that we will use to listen for new blocks.
     WSS_ENDPOINTS: [
+        'wss://polygon-mainnet.g.alchemy.com/v2/KRAnq0xLYyvFY8t5uU6WvMzZ1dm9RIRD',
+        'wss://polygon-mainnet.g.alchemy.com/v2/ByUcAAcyEb85qUvPoedtCgC7dXkNA9qh',
+        'wss://holy-polished-sailboat.matic.discover.quiknode.pro/cfc050375844516de9567424bfea499dd78e2556',
         'wss://matic.getblock.io/c532343e-d633-4146-a312-d852eeaaea04/mainnet/',
         'wss://polygon-bor.publicnode.com',
-        'wss://polygon.drpc.org',
-        'wss://polygon.drpc.org/ws',
         'wss://polygon.llamarpc.com',
         'wss://rpc-mainnet.matic.quiknode.pro',
-        // 'wss://polygon.gateway.tenderly.co',
         'wss://polygon.meowrpc.com/ws',
+        
+        // 'wss://polygon.gateway.tenderly.co', // Strange error
+        // 'wss://lb.drpc.org/ogws?network=polygon&dkey=Ai9ewDXuCEYYo6hI7gnq2PuFTnjfaQAR7onvbrjxQOzW', // Strange error
     ],
+
+    // Temp variable, replace later by HTTPS_ENDPOINTS[0]
+    HTTPS_URL: "https://polygon-mainnet.g.alchemy.com/v2/KRAnq0xLYyvFY8t5uU6WvMzZ1dm9RIRD",
+    HTTPS2_URL: "https://polygon-mainnet.g.alchemy.com/v2/ByUcAAcyEb85qUvPoedtCgC7dXkNA9qh",
+    WSS_URL: "wss://polygon-mainnet.g.alchemy.com/v2/KRAnq0xLYyvFY8t5uU6WvMzZ1dm9RIRD",
 };
