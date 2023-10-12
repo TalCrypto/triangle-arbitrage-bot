@@ -165,6 +165,13 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     }
 
     setInterval(function() {
+        // If the probe is not running anymore, stop the interval
+        if (runningHttpProviderCount == 0 && runningWsProviderCount == 0) {
+            clearInterval(this);
+            // Exit the process
+            process.exit();
+        }
+
         console.log("\n========== Latency Report ==========");
         // For each block, check if all providers have reported the block. Then store the average latency compared to the first block arrival.
         let blockNumbers = Object.keys(blockProviderTime);
