@@ -86,13 +86,23 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
                 try {
                     const blockNumber = await provider.getBlockNumber();
                     let tEnd = new Date().getTime();
+                    if (!blockProviderTime[blockNumber]) {
+                        blockProviderTime[blockNumber] = {};
+                    }
+                    if (!providerBlockTime[providerUrl]) {
+                        providerBlockTime[providerUrl] = {};
+                    }
+
+                    if(!blockProviderTime[blockNumber][providerUrl]) {
+                        blockProviderTime[blockNumber][providerUrl] = tEnd;
+                        providerBlockTime[providerUrl][blockNumber] = tEnd;
                     if(!blockProviderTime[providerUrl]) {
                         blockProviderTime[providerUrl] = tEnd;
                         providerBlockTime[blockNumber] = tEnd;
                         providerRequestDuration[providerUrl] = tEnd - tStart;
 
-                    } else if (blockProviderTime[providerUrl] > tEnd) {
-                        console.log(`Error: Block regression detected ! Provider ${providerUrl} | Block ${blockNumber} | Time saved ${blockProviderTime[providerUrl]} | Time now ${tEnd}`);
+                    } else if (blockProviderTime[blockNumber][providerUrl] > tEnd) {
+                        console.log(`Error: Block regression detected ! Provider ${providerUrl} | Block ${blockNumber} | Time saved ${blockProviderTime[blockNumber][providerUrl]} | Time now ${tEnd}`);
                     }
 
                     console.log(`Provider ${providerUrl} | Block ${blockNumber} | Time: ${tEnd - tStart}ms`);
@@ -127,12 +137,12 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
             provider.on('block', (blockNumber) => {
                 let t1 = new Date().getTime();
         
-                if(!blockProviderTime[providerUrl]) {
-                    blockProviderTime[providerUrl] = t1;
-                    providerBlockTime[blockNumber] = t1;
+                if(!blockProviderTime[blockNumber][providerUrl]) {
+                    blockProviderTime[blockNumber][providerUrl] = t1;
+                    providerBlockTime[providerUrl][blockNumber] = t1;
                     
-                } else if(blockProviderTime[providerUrl] > t1) {
-                    console.log(`Error: Block regression detected ! Provider ${providerUrl} | Block ${blockNumber} | Time saved ${blockProviderTime[providerUrl]} | Time now ${t1}`);
+                } else if(blockProviderTime[blockNumber][providerUrl] > t1) {
+                    console.log(`Error: Block regression detected ! Provider ${providerUrl} | Block ${blockNumber} | Time saved ${blockProviderTime[blockNumber][providerUrl]} | Time now ${t1}`);
                 }
 
                 console.log(`WSS Provider ${providerUrl} | Block ${blockNumber} | Time: ${t1 - t0}ms`);
@@ -155,7 +165,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     }
 
     setInterval(function() {
-        console.log("--------- Block Latency Report ----------");
+        console.log("\n========== Latency Report ==========");
         // For each block, check if all providers have reported the block. Then store the average latency compared to the first block arrival.
         let blockNumbers = Object.keys(blockProviderTime);
         let providerUrls = Object.keys(providerBlockTime);
@@ -172,10 +182,10 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
                     arrivals.push(providerBlockTime[providerUrl][blockNumber]);
                 }
             }
-            arrivals.sort();
+            arrivals.sort((a, b) => a - b);
             blockArrivals[blockNumber] = arrivals;
 
-            // Calculate the average latency for each provider
+            // Calculate the average block propagation latency for each provider
             for (const providerUrl of providerUrls) {
                 if (providerBlockTime[providerUrl][blockNumber]) {
                     if (!sumLatency[providerUrl]) {
@@ -188,25 +198,33 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
             }
         }
         
-        // Print the average latency for each provider
+        // Print the average block propagation latency for each provider
         console.log("=== Individual provider latency ===")
+        let providerLatency = [];
         for (const providerUrl of providerUrls) {
-            console.log(`Provider ${providerUrl} | Average latency: ${sumLatency[providerUrl] / blockCount[providerUrl]} ms`);
+            providerLatency.push([providerUrl, Math.round(sumLatency[providerUrl] / blockCount[providerUrl])]);
+        }
+        providerLatency.sort((a, b) => a[1] - b[1]);
+        for (const [providerUrl, latency] of providerLatency) {
+            console.log(`Average latency: ${latency} ms | Provider ${providerUrl}`);
         }
 
         // Print the distribution (deciles) of block arrivals over all the blocks
-        console.log("=== Block arrival distribution ===")
+        console.log("=== Block arrival distribution (percentiles) ===")
+        const N = 10;
         let blockArrivalsArray = [];
         for (const blockNumber of blockNumbers) {
             for (const arrival of blockArrivals[blockNumber]) {
-                blockArrivalsArray.push(arrival);
+                blockArrivalsArray.push(arrival - blockArrivals[blockNumber][0]);
             }
         }
-        blockArrivalsArray.sort();
-        const N = 10;
+        blockArrivalsArray.sort((a, b) => a - b);
+        console.log(`Distribution of block arrivals over ${blockArrivalsArray.length} blocks (${N} percentiles):`);
+        let percentiles = [];
         for (let i = 0; i < N; i++) {
-            console.log(`Block arrival ${i * 10}%: ${blockArrivalsArray[Math.floor(blockArrivalsArray.length * i / N)]}`);
+            percentiles.push(blockArrivalsArray[Math.floor(blockArrivalsArray.length * i / N)]);
         }
+        console.log(percentiles);
 
 
     }, 1000*10); // Print latency every 10 seconds
