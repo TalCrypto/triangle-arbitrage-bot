@@ -60,7 +60,7 @@ if (buildFlag == "-build" || buildFlag == "-b") {
     // Profile block arrivals
     profileBlockArrivals(probeDuration * 60 * 1000);
 
-} else {
+} else if (!buildFlag) {
     // Run the bot. First, check if the .env file exists
     const dotenv = require('dotenv');
     const fs = require('fs');
@@ -84,5 +84,8 @@ if (buildFlag == "-build" || buildFlag == "-b") {
         // Start the bot by running the "main" function of strategy.js
         await main();
     })();
+} else {
+    console.log("Invalid flag. Valid flags are: -build, -b, -profileblocks, -pb");
+    return;
 }
 
