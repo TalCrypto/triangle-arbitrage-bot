@@ -135,6 +135,13 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
         
             provider.on('block', (blockNumber) => {
                 let t1 = new Date().getTime();
+                
+                if (!blockProviderTime[blockNumber]) {
+                    blockProviderTime[blockNumber] = {};
+                }
+                if (!providerBlockTime[providerUrl]) {
+                    providerBlockTime[providerUrl] = {};
+                }
         
                 if(!blockProviderTime[blockNumber][providerUrl]) {
                     blockProviderTime[blockNumber][providerUrl] = t1;
@@ -245,7 +252,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
     }, 1000*10); // Print latency every 10 seconds
     
     probeHttpProviders(probeDuration);
-    // listenWsProviders(probeDuration);
+    listenWsProviders(probeDuration);
 }
 
 module.exports = {
