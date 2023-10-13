@@ -13,6 +13,7 @@ const {
     CHAIN_ID,
     HTTP_ENDPOINTS,
 } = require('./constants');
+
 const { logger } = require('./constants');
 const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSelectPaths } = require('./pools');
 const { generatePaths } = require('./paths');
@@ -23,6 +24,7 @@ const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator
 const { buildTx, buildBlankTx } = require('./bundler');
 const fs = require('fs');
 const path = require('path');
+
 
 async function main() {
     logger.info("Program started");
@@ -42,6 +44,7 @@ async function main() {
     let approvedTokens = JSON.parse(fs.readFileSync('data/dump_valid_tokens.json', 'utf8'));
     logger.info(`Approved token count: ${Object.keys(approvedTokens).length}`);
 
+
     let pools_v2, pools_v3;
     // Fetch v2, v3 pools
     // logger.info("Fetching v2 pools... (this can take a while)");
@@ -50,6 +53,7 @@ async function main() {
     // pools_v3 = await loadAllPoolsFromV3(provider, factoryAddresses_v3);
     // fs.writeFileSync('data/v2_pools.json', JSON.stringify(pools_v2)); // Save v2 pools to file using fs
     // fs.writeFileSync('data/v3_pools.json', JSON.stringify(pools_v3)); // Save v3 pools to file using fs
+
 
     // Read pools from file if pool_v2 and pool_v3 are empty
     if (!pools_v2 && !pools_v3) {
@@ -193,6 +197,7 @@ async function main() {
                     // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
                     newPaths = newPaths.filter(path => !touchedPaths.includes(path));
                     touchedPaths = touchedPaths.concat(newPaths);
+
                 }
             }
             logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
@@ -350,6 +355,12 @@ async function main() {
             let blockElapsed = new Date() - sblock;
             dataStore.block.push(blockElapsed);
             logger.info(`=== End of block #${blockNumber} (took ${(blockElapsed) / 1000} s)`);
+        }
+    });
+
+    eventMemPoolEmitter.on('event', async (event) => {
+        if (event.type == 'pendingTx') {
+            console.log('▶️ Tx Hash: ', event);
         }
     });
 }
