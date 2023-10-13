@@ -1,3 +1,12 @@
+# Cached data for the bot
+*.csv
+*.txt
+data/*.log
+*.zip
+*.png
+cache
+*.toml
+
 # Logs
 logs
 *.log

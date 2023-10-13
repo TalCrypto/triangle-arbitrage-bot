@@ -1,5 +1,4 @@
 const cliProgress = require('cli-progress');
-
 const { logger } = require('./constants');
 const { UniswapV2Simulator } = require('./simulator');
 
@@ -15,19 +14,13 @@ const range = (start, stop, step) => {
 
 class ArbPath {
     constructor(
-        pool1,
-        pool2,
-        pool3,
-        zeroForOne1,
-        zeroForOne2,
-        zeroForOne3
+        root, // root token, token from which the arbitrage path starts
+        pools, // pool1, pool2, pool3; The pools involved in the arbitrage path
+        directions, // zeroForOne1, zeroForOne2, ...; Indicates the direction of each swap. zfo = true means token0 -> token1.
     ) {
-        this.pool1 = pool1;
-        this.pool2 = pool2;
-        this.pool3 = pool3;
-        this.zeroForOne1 = zeroForOne1;
-        this.zeroForOne2 = zeroForOne2;
-        this.zeroForOne3 = zeroForOne3;
+        this.root = root;
+        this.pools = pools;
+        this.directions = directions;
     }
 
     nhop() {
@@ -158,7 +151,115 @@ function generateTriangularPaths(pools, tokenIn) {
     return paths;
 }
 
+
+function generatePaths(rootTokens, pools, maxHops) {
+    // Stores all temporary paths
+    const tempPoolPaths = []; // [[pool1, pool2, ...., poolN], ...]
+
+    // Store the input token for the next hop of each path
+    const tempOutTokens = []; // [outTokenForPath1, outTokenForPath2, ...]
+    
+    const finalPaths = [];
+
+    // Lookup table to retrieve pools by token involved
+    const tokenToPools = {}; // {token1: [pool1, pool2, ...], token2: [pool1, pool2, ...], ...}
+
+    // Build the lookup table. pools is not iterable.
+    for (let pool of Object.values(pools)) {
+        if (!(pool.token0 in tokenToPools)) {
+            tokenToPools[pool.token0] = [];
+        }
+        if (!(pool.token1 in tokenToPools)) {
+            tokenToPools[pool.token1] = [];
+        }
+        tokenToPools[pool.token0].push(pool);
+        tokenToPools[pool.token1].push(pool);
+    }
+
+    // Define recursive function to generate paths
+    function generatePathsRecursive(tokenIn, path, stopToken, hop) {
+        // If the current hop is the last hop, we should stop here
+        if (hop == maxHops) {
+            return;
+        }
+
+        // Get all pools that involve the input token
+        let potentialPools = tokenToPools[tokenIn];
+        if (potentialPools === undefined) {
+            return;
+        }
+
+        // Check if the potential pools are already in the path by comparing addresses
+        
+        let futurePools = potentialPools.filter(pool => {
+            return !path.some(pathPool => {
+                return pathPool.address == pool.address;
+            });
+        });
+
+        // If there are no more pools to explore, we should stop here
+        if (futurePools.length == 0) {
+            return;
+        }
+
+        // For each pool, we should explore the next hop
+        for (let pool of futurePools) {
+            // Get the output token for the next hop
+            let tokenOut = pool.token0 == tokenIn ? pool.token1 : pool.token0;
+
+            // If the output token is the stop token, we should add the path to the final paths
+            let futurePath = [...path, pool];
+            if (tokenOut == stopToken) {
+                finalPaths.push({
+                    pools: futurePath,
+                    rootToken: stopToken,
+                });
+            } else {
+                // Otherwise, we should explore the next hop
+                generatePathsRecursive(tokenOut, futurePath, stopToken, hop + 1);
+            }
+        }
+    }
+
+    // Use the recursive function to generate paths for each root token
+    let pathCount = 0;
+    for (let rootToken of rootTokens) {
+        generatePathsRecursive(rootToken, [], rootToken, 0);
+        logger.info(`Generated ${finalPaths.length - pathCount} paths for ${rootToken}`);
+        pathCount = finalPaths.length;
+    }
+
+    // Add the zfoList array to the final path objects
+    for (let path of finalPaths) {
+        let zfoList = [];
+
+        // Set the first zfo with respect to the root token
+        zfoList.push(path.pools[0].token0 === path.rootToken);
+        let outToken = zfoList[0] ? path.pools[0].token1 : path.pools[0].token0;
+
+        // Set the rest of the zfo with respect to the previous pool
+        for (let i = 1; i < path.pools.length; i++) {
+            zfoList.push(path.pools[i].token0 == outToken);
+            outToken = zfoList[i] ? path.pools[i].token1 : path.pools[i].token0;
+        }
+
+        path.directions = zfoList;
+    }
+
+    /*
+    [{
+        pools: [pool1, pool2, pool3],
+        rootToken: token1,
+        directions: [true, false, true],
+    }, ...]
+    */
+
+    return finalPaths; 
+}
+
+
 module.exports = {
     ArbPath,
     generateTriangularPaths,
+    generatePaths,
 };

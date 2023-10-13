@@ -7,15 +7,13 @@ function streamNewBlocks(wssUrl, eventEmitter) {
 
     wss.on('block', async (blockNumber) => {
         let block = await wss.getBlock(blockNumber);
-        let nextBaseFee = calculateNextBlockBaseFee(block);
-        let estimateGas = await estimateNextBlockGas(); 
+        // let nextBaseFee = calculateNextBlockBaseFee(block);
+        // let estimateGas = await estimateNextBlockGas(); 
 
         eventEmitter.emit('event', {
             type: 'block',
             blockNumber: block.number,
             baseFee: BigInt(block.baseFeePerGas),
-            nextBaseFee,
-            ...estimateGas,
         });
     });
 }
