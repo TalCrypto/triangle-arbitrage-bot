@@ -216,7 +216,7 @@ async function main() {
             if (fetchPools.length > 0) {
                 logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
                 s = new Date();
-                await batchReserves(provider, pools, fetchPools, 100, 5, blockNumber);
+                await batchReserves(provider, pools, fetchPools, 1000, 5, blockNumber);
                 e = new Date();
                 dataStore.reserves.push(e - s);
                 logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
@@ -257,6 +257,8 @@ async function main() {
             let profitablePaths = [];
             logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
             for (let path of touchedPaths) {
+                console.log('path')
+                console.dir(path, {depth: 5})
                 let amountIn = optimizeAmountIn(path);
                 if (amountIn === 0n) continue; // Grossly unprofitable
 
@@ -358,11 +360,11 @@ async function main() {
         }
     });
 
-    eventMemPoolEmitter.on('event', async (event) => {
-        if (event.type == 'pendingTx') {
-            console.log('▶️ Tx Hash: ', event);
-        }
-    });
+    // eventMemPoolEmitter.on('event', async (event) => {
+    //     if (event.type == 'pendingTx') {
+    //         console.log('▶️ Tx Hash: ', event);
+    //     }
+    // });
 }
 
 module.exports = {
