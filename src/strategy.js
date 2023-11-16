@@ -200,6 +200,7 @@ async function main() {
 
                 }
             }
+            console.dir(touchedPaths, {depth: 100});
             logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
             // Check if we are still working on the latest block
@@ -257,8 +258,11 @@ async function main() {
             let profitablePaths = [];
             logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
             for (let path of touchedPaths) {
-                console.log('path')
-                console.dir(path, {depth: 5})
+                if(path.pools.length==2){
+                    console.log('path')
+                    console.dir(path, {depth: 5})
+                }
+
                 let amountIn = optimizeAmountIn(path);
                 if (amountIn === 0n) continue; // Grossly unprofitable
 
@@ -328,8 +332,8 @@ async function main() {
             let tipPercent = 200;
             let start = Date.now();
             let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
-            logger.info("DEBUG: Replacing TX with blank TX...")
-            txObject = await buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, blockNumber + 1);
+            // logger.info("DEBUG: Replacing TX with blank TX...")
+            // txObject = await buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, blockNumber + 1);
 
             // Send the transaction
             let promises = [];
