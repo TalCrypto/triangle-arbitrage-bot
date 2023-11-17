@@ -75,8 +75,8 @@ const temp_path = {
 
 test('Should be calculate the optimized amount', ()=>{
     const amountIn = optimizeAmountIn(temp_path);
-    const amountPIn = amountIn + BigInt(100);
-    const amountMIn = amountIn - BigInt(100);
+    const amountPIn = amountIn + BigInt(1000000);
+    const amountMIn = amountIn - BigInt(1000000);
     const profitwei = computeProfit(amountIn, temp_path);
     const profitPwei = computeProfit(amountPIn, temp_path);
     const profitMwei = computeProfit(amountMIn, temp_path);
