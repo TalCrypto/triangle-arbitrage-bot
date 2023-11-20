@@ -29,7 +29,8 @@ const path = require('path');
 async function main() {
     logger.info("Program started");
     const wsProvider = new ethers.providers.WebSocketProvider(WS_LOCAL);
-    const providers = HTTP_ENDPOINTS.map(url=>new ethers.providers.JsonRpcProvider(url));
+    let providers = HTTP_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
+    providers = providers.concat([wsProvider]);
     const factoryAddresses_v2 = [
         '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', // QuickSwap
         '0xc35DADB65012eC5796536bD9864eD8773aBc74C4', // SushiSwap
