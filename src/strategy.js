@@ -356,11 +356,6 @@ async function main() {
         }
     });
 
-    eventMemPoolEmitter.on('event', async (event) => {
-        if (event.type == 'pendingTx') {
-            console.log('▶️ Tx Hash: ', event);
-        }
-    });
 }
 
 module.exports = {
