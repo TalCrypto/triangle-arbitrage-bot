@@ -200,4 +200,5 @@ module.exports = {
     HTTPS_URL: "https://polygon-mainnet.g.alchemy.com/v2/KRAnq0xLYyvFY8t5uU6WvMzZ1dm9RIRD",
     HTTPS2_URL: "https://polygon-mainnet.g.alchemy.com/v2/ByUcAAcyEb85qUvPoedtCgC7dXkNA9qh",
     WSS_URL: "wss://polygon-mainnet.g.alchemy.com/v2/KRAnq0xLYyvFY8t5uU6WvMzZ1dm9RIRD",
+    WS_LOCAL: "ws://127.0.0.1:8546"
 };

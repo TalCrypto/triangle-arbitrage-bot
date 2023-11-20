@@ -28,11 +28,8 @@ const path = require('path');
 
 async function main() {
     logger.info("Program started");
-    const wss = new ethers.providers.WebSocketProvider(WSS_URL);
-    const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
-    const providerReserves = new ethers.providers.JsonRpcProvider(HTTPS2_URL);
-    let providers = HTTP_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
-    providers = providers.concat([wss, provider, providerReserves]);
+    const wsProvider = new ethers.providers.WebSocketProvider(WS_LOCAL);
+    const providers = HTTP_ENDPOINTS.map(url=>new ethers.providers.JsonRpcProvider(url));
     const factoryAddresses_v2 = [
         '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', // QuickSwap
         '0xc35DADB65012eC5796536bD9864eD8773aBc74C4', // SushiSwap
@@ -79,7 +76,7 @@ async function main() {
 
     // Fetch the reserves of all pools
     let s = new Date();
-    await batchReserves(provider, pools, [], 100, 10, await provider.getBlockNumber());
+    await batchReserves(wsProvider, pools, [], 100, 10, await wsProvider.getBlockNumber());
     let e = new Date();
     logger.info(`Batch reserves call took: ${(e - s) / 1000} seconds`);
 
@@ -125,9 +122,9 @@ async function main() {
 
     // Start session timer, display profit every 30 blocks
     let sessionStart = new Date();
-    let lastGasPrice = await provider.getGasPrice();
-    let lastTxCount = await provider.getTransactionCount(SENDER_ADDRESS);
-    let lastBlockNumber = await provider.getBlockNumber(); // Used to abandon old blocks, when a new one is received.
+    let lastGasPrice = await wsProvider.getGasPrice();
+    let lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS);
+    let lastBlockNumber = await wsProvider.getBlockNumber(); // Used to abandon old blocks, when a new one is received.
     let poolsToRefresh = Object.keys(pools); // Once the bot starts receiving blocks, we refresh gradually the reserves of every pool, ensuring that our profit math is always correct.
     let hasRefreshed = false; // When flips to true, purge dataStore to get replace transient latency data with steady-state data.
 
@@ -161,11 +158,11 @@ async function main() {
         }
 
         // Pre-fetch the gas price and tx count for the new block
-        let pricePromise = provider.getGasPrice();
+        let pricePromise = wsProvider.getGasPrice();
         pricePromise.then((price) => {
             lastGasPrice = price;
         });
-        let txPromise = provider.getTransactionCount(SENDER_ADDRESS);
+        let txPromise = wsProvider.getTransactionCount(SENDER_ADDRESS);
         txPromise.then((txCount) => {
             lastTxCount = txCount;
         });
@@ -181,7 +178,7 @@ async function main() {
 
             // Find pools that were updated in the last block
             s = new Date();
-            let touchedPools = await findUpdatedPools(provider, blockNumber, pools, approvedTokens);
+            let touchedPools = await findUpdatedPools(wsProvider, blockNumber, pools, approvedTokens);
             e = new Date();
             dataStore.events.push(e - s);
             logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
@@ -216,7 +213,7 @@ async function main() {
             if (fetchPools.length > 0) {
                 logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
                 s = new Date();
-                await batchReserves(provider, pools, fetchPools, 100, 5, blockNumber);
+                await batchReserves(wsProvider, pools, fetchPools, 100, 5, blockNumber);
                 e = new Date();
                 dataStore.reserves.push(e - s);
                 logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
@@ -319,7 +316,7 @@ async function main() {
 
             // Create a signer
             const signer = new ethers.Wallet(PRIVATE_KEY);
-            const account = signer.connect(provider);
+            const account = signer.connect(wsProvider);
             const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
             // Use JSON-RPC instead of ethers.js to send the signed transaction
