@@ -144,7 +144,7 @@ async function main() {
     }
 
     // Start listening to new blocks using websockets
-    wss.on('block', async (blockNumber) => {
+    wsProvider.on('block', async (blockNumber) => {
         // Start of block timer
         let sblock = new Date(); 
 
