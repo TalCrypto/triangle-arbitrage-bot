@@ -244,114 +244,6 @@ async function main() {
                 return;
             }
 
-            // Make sure that we are still working on the latest block
-            if (blockNumber < lastBlockNumber) {
-                logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
-                return;
-            }
-
-            // For each path, compute the optimal amountIn to trade, and the profit
-            s = new Date();
-            let profitablePaths = [];
-            logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
-            for (let path of touchedPaths) {
-                if (path.pools.length == 2) {
-                    console.log('path')
-                    console.dir(path, { depth: 5 })
-                }
-
-                let amountIn = optimizeAmountIn(path);
-                if (amountIn === 0n) continue; // Grossly unprofitable
-
-                let profitwei = computeProfit(amountIn, path);
-                if (profitwei <= 0n) continue; // Unprofitable
-                let profitusd = safeTokens[path.rootToken].usd * Number(profitwei) / 10 ** safeTokens[path.rootToken].decimals;
-
-                // Store the profit and amountIn values
-                path.amountIn = amountIn;
-                path.profitwei = profitwei;
-                path.profitusd = profitusd;
-
-                profitablePaths.push(path);
-            }
-
-            profitablePaths.sort((pathA, pathB) => {
-                return pathB.profitusd - pathA.profitusd;
-            });
-            const path = profitablePaths[0];
-            e = new Date();
-            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
-
-            if (profitablePaths.length == 0) {
-                // No profitable paths, skip arbitrage transaction
-                logger.info(`No profitable paths, skipping arbitrage transaction.`);
-                return;
-            }
-
-            if (path.profitusd < 0.02) {
-                // Profit of the best path is too low, skip arbitrage transaction
-                logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
-                return;
-            }
-
-            // Display the profitable path
-            logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei) / 10 ** SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
-
-            // Store profit in profitStore
-            profitStore[path.rootToken] += path.profitwei
-
-            elapsed = new Date() - sblock;
-
-            // Check if the trade has 3 pools (2 pools not yet implemented)
-            if (path.pools.length != 3) {
-                logger.info(`Path has ${path.pools.length} pools, skipping block #${blockNumber}`);
-                return;
-            }
-
-            // The promises should have long resolved by now, grab the values.
-            await Promise.all([pricePromise, txPromise]);
-
-            // Make sure that we are still working on the latest block
-            if (blockNumber < lastBlockNumber) {
-                logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
-                return;
-            }
-
-            // Send arbitrage transaction
-            logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
-
-            // Create a signer
-            const signer = new ethers.Wallet(PRIVATE_KEY);
-            const account = signer.connect(wsProvider);
-            const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
-
-            // Use JSON-RPC instead of ethers.js to send the signed transaction
-            let tipPercent = 200;
-            let start = Date.now();
-            let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
-            // logger.info("DEBUG: Replacing TX with blank TX...")
-            // txObject = await buildBlankTx(signer, lastTxCount, lastGasPrice, tipPercent, blockNumber + 1);
-
-            // Send the transaction
-            let promises = [];
-            let successCount = 0;
-            let failedEndpoints = [];
-            promises = promises.concat(providers.map((pvdr) => pvdr.send("eth_sendRawTransaction", txObject)));
-            promises.forEach((promise, index) => {
-                promise.then(() => {
-                    successCount++;
-                }).catch((e) => {
-                    failedEndpoints.push(HTTP_ENDPOINTS[index]);
-                    logger.error(`Error while sending to ${HTTP_ENDPOINTS[index]}: ${e}`);
-                });
-            });
-
-            // Wait for all the promises to resolve
-            logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s after block #${blockNumber}`);
-            await Promise.all(promises);
-            logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
-            lastTxCount++;
-
         } catch (e) {
             logger.error(`Error while processing block #${blockNumber}: ${e}`);
         } finally {
@@ -376,12 +268,12 @@ async function main() {
         // so we skip in this case
         if (!txnData) return;
 
-        // in case of our own tx, skip
-        if (txnData['from'].toLowerCase() == SENDER_ADDRESS.toLowerCase()) return;
+        // clone pathsByPool to modify it with estimated values without affecting the original object that are updated evey block
+        const clonedPathsByPool = structuredClone(pathsByPool);
 
         // simulate the pending transaction
         // doesn't change the EVM states of mainnet, hence there is no gas costs
-        wsProvider.send(
+        const response = await wsProvider.send(
             "debug_traceCall",
             [
                 {
@@ -395,21 +287,161 @@ async function main() {
                     tracerConfig: { withLog: true }
                 }
             ]
-        ).then(response => {
-            if (response.logs && response.logs.length > 0) {
-                const poolEventLogs = response.logs.filter(log => poolAddresses.includes(log.address.toLowerCase()));
-                if (poolEventLogs.length > 0) {
-                    for (var i = 0; i < poolEventLogs.length; i++) {
-                        const log = poolEventLogs[i];
-                        if (iface.getEventTopic("Sync") === log.topics[0]) {
-                            const v2Evt = iface.decodeEventLog("Sync", log.data, log.topics);
-                        } else if (iface.getEventTopic("Swap") === log.topics[0]) {
-                            const v3Evt = iface.decodeEventLog("Swap", log.data, log.topics);
+        );
+
+        const blockNumber = await wsProvider.getBlockNumber();
+
+        if (!response.logs || response.logs.length == 0) return;
+
+        const poolEventLogs = response.logs.filter(log => poolAddresses.includes(log.address.toLowerCase()));
+
+        if (poolEventLogs.length == 0) return;
+
+        const touchablePoolAddresses = [];
+
+        // check if the simulated event logs will touch the pools we observe
+        // if it does, modify clonedPathsByPool with the estimated values
+        for (let log of poolEventLogs) {
+            const checksumPoolAddress = ethers.utils.getAddress(log.address);
+            if (iface.getEventTopic("Sync") == log.topics[0]) {
+                const v2Evt = iface.decodeEventLog("Sync", log.data, log.topics);
+                for (let path of clonedPathsByPool[checksumPoolAddress]) {
+                    for (let pool of path.pools) {
+                        if (pool.address == checksumPoolAddress) {
+                            pool.extra.reserve0 = BigInt(v2Evt.reserve0.toString());
+                            pool.extra.reserve1 = BigInt(v2Evt.reserve1.toString());
+                            pool.extra.liquidity = BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString());
                         }
                     }
                 }
+                touchablePoolAddresses.push(checksumPoolAddress);
+            } else if (iface.getEventTopic("Swap") == log.topics[0]) {
+                const v3Evt = iface.decodeEventLog("Swap", log.data, log.topics);
+                for (let path of clonedPathsByPool[checksumPoolAddress]) {
+                    for (let pool of path.pools) {
+                        if (pool.address == checksumPoolAddress) {
+                            pool.extra.sqrtPriceX96 = BigInt(v3Evt.sqrtPriceX96.toString());
+                            pool.extra.liquidity = BigInt(evt.liquidity.toString());
+                        }
+                    }
+                }
+                touchablePoolAddresses.push(checksumPoolAddress);
             }
+        }
+
+        // Find paths that use the touchable pools
+        const MAX_PATH_EVALUATION = 500; // Share that value between each touchable pool
+        let touchablePaths = [];
+        for (let poolAddress of touchablePoolAddresses) {
+            if (poolAddress in clonedPathsByPool) {
+                // Find the new paths, check if they are not already in touchedPaths
+                let newPaths = preSelectPaths(clonedPathsByPool[poolAddress], MAX_PATH_EVALUATION / touchablePoolAddresses.length, 0.5);
+
+                // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
+                newPaths = newPaths.filter(path => !touchablePaths.includes(path));
+                touchablePaths = touchablePaths.concat(newPaths);
+            }
+        }
+
+        // For each path, compute the optimal amountIn to trade, and the profit
+        s = new Date();
+        let profitablePaths = [];
+        logger.info(`Evaluating ${touchablePaths.length} touchable paths. Block #${blockNumber}`);
+        for (let path of touchablePaths) {
+            if (path.pools.length == 2) {
+                console.log('path')
+                console.dir(path, { depth: 5 })
+            }
+
+            let amountIn = optimizeAmountIn(path);
+            if (amountIn === 0n) continue; // Grossly unprofitable
+
+            let profitwei = computeProfit(amountIn, path);
+            if (profitwei <= 0n) continue; // Unprofitable
+            let profitusd = safeTokens[path.rootToken].usd * Number(profitwei) / 10 ** safeTokens[path.rootToken].decimals;
+
+            // Store the profit and amountIn values
+            path.amountIn = amountIn;
+            path.profitwei = profitwei;
+            path.profitusd = profitusd;
+
+            profitablePaths.push(path);
+        }
+
+        if (profitablePaths.length == 0) {
+            // No profitable paths, skip arbitrage transaction
+            logger.info(`No profitable paths, skipping arbitrage transaction.`);
+            return;
+        }
+
+        profitablePaths.sort((pathA, pathB) => {
+            return pathB.profitusd - pathA.profitusd;
         });
+        const path = profitablePaths[0];
+        e = new Date();
+        logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
+
+        if (path.profitusd < 0.02) {
+            // Profit of the best path is too low, skip arbitrage transaction
+            logger.info(`Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`);
+            return;
+        }
+
+        // Display the profitable path
+        logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei) / 10 ** SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
+
+        // Store profit in profitStore
+        profitStore[path.rootToken] += path.profitwei
+
+        // elapsed = new Date() - sblock;
+
+        // Check if the trade has 3 pools (2 pools not yet implemented)
+        if (path.pools.length != 3) {
+            logger.info(`Path has ${path.pools.length} pools, skipping transaction ${pendingTx}`);
+            return;
+        }
+
+        // The promises should have long resolved by now, grab the values.
+        await Promise.all([pricePromise, txPromise]);
+
+        // Make sure that we are still working on the latest block
+        if (blockNumber < lastBlockNumber) {
+            logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
+            return;
+        }
+
+        // Send arbitrage transaction
+        logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
+
+        // Create a signer
+        const signer = new ethers.Wallet(PRIVATE_KEY);
+        const account = signer.connect(wsProvider);
+        const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
+
+        // Use JSON-RPC instead of ethers.js to send the signed transaction
+        let tipPercent = 200;
+        let start = Date.now();
+        let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
+
+        // Send the transaction
+        let promises = [];
+        let successCount = 0;
+        let failedEndpoints = [];
+        promises = promises.concat(providers.map((pvdr) => pvdr.send("eth_sendRawTransaction", txObject)));
+        promises.forEach((promise, index) => {
+            promise.then(() => {
+                successCount++;
+            }).catch((e) => {
+                failedEndpoints.push(HTTP_ENDPOINTS[index]);
+                logger.error(`Error while sending to ${HTTP_ENDPOINTS[index]}: ${e}`);
+            });
+        });
+
+        // Wait for all the promises to resolve
+        logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s after block #${blockNumber}`);
+        await Promise.all(promises);
+        logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
+        lastTxCount++;
     })
 }
 
