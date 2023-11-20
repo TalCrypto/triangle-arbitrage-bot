@@ -1,5 +1,4 @@
 const { ethers } = require('ethers');
-const EventEmitter = require('events');
 
 const {
     HTTPS_URL,
@@ -146,10 +145,10 @@ async function main() {
     // Start listening to new blocks using websockets
     wsProvider.on('block', async (blockNumber) => {
         // Start of block timer
-        let sblock = new Date(); 
+        let sblock = new Date();
 
         // Old block guard
-        if (blockNumber <= lastBlockNumber) { 
+        if (blockNumber <= lastBlockNumber) {
             // We have already processed this block, or an older one. Ignore it.
             logger.info(`Ignoring old block #${blockNumber} (latest block is #${lastBlockNumber})`);
             return;
@@ -167,7 +166,7 @@ async function main() {
         txPromise.then((txCount) => {
             lastTxCount = txCount;
         });
-        
+
 
         try {
             logger.info(`=== New Block #${blockNumber}`);
@@ -198,7 +197,7 @@ async function main() {
 
                 }
             }
-            console.dir(touchedPaths, {depth: 100});
+            console.dir(touchedPaths, { depth: 100 });
             logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
             // Check if we are still working on the latest block
@@ -256,9 +255,9 @@ async function main() {
             let profitablePaths = [];
             logger.info(`Evaluating ${touchedPaths.length} touched paths. Block #${blockNumber}`);
             for (let path of touchedPaths) {
-                if(path.pools.length==2){
+                if (path.pools.length == 2) {
                     console.log('path')
-                    console.dir(path, {depth: 5})
+                    console.dir(path, { depth: 5 })
                 }
 
                 let amountIn = optimizeAmountIn(path);
@@ -308,7 +307,7 @@ async function main() {
                 logger.info(`Path has ${path.pools.length} pools, skipping block #${blockNumber}`);
                 return;
             }
-            
+
             // The promises should have long resolved by now, grab the values.
             await Promise.all([pricePromise, txPromise]);
 
@@ -362,6 +361,56 @@ async function main() {
         }
     });
 
+    const poolAddresses = Object.keys(pools).map(poolId => pools[poolId].address).map(addr => addr.toLowerCase());
+
+    // we consider only the swap events to find the opportunity
+    const iface = new ethers.utils.Interface([
+        'event Sync(uint112 reserve0, uint112 reserve1)',
+        'event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)'
+    ])
+
+    wsProvider.on('pending', async (pendingTx) => {
+        const txnData = await wsProvider.getTransaction(pendingTx);
+
+        // the local node can't get the tranaction data if it has been announced
+        // so we skip in this case
+        if (!txnData) return;
+
+        // in case of our own tx, skip
+        if (txnData['from'].toLowerCase() == SENDER_ADDRESS.toLowerCase()) return;
+
+        // simulate the pending transaction
+        // doesn't change the EVM states of mainnet, hence there is no gas costs
+        wsProvider.send(
+            "debug_traceCall",
+            [
+                {
+                    from: txnData['from'],
+                    to: txnData['to'],
+                    data: txnData['data'],
+                },
+                "latest",
+                {
+                    tracer: "callTracer",
+                    tracerConfig: { withLog: true }
+                }
+            ]
+        ).then(response => {
+            if (response.logs && response.logs.length > 0) {
+                const poolEventLogs = response.logs.filter(log => poolAddresses.includes(log.address.toLowerCase()));
+                if (poolEventLogs.length > 0) {
+                    for (var i = 0; i < poolEventLogs.length; i++) {
+                        const log = poolEventLogs[i];
+                        if (iface.getEventTopic("Sync") === log.topics[0]) {
+                            const v2Evt = iface.decodeEventLog("Sync", log.data, log.topics);
+                        } else if (iface.getEventTopic("Swap") === log.topics[0]) {
+                            const v3Evt = iface.decodeEventLog("Swap", log.data, log.topics);
+                        }
+                    }
+                }
+            }
+        });
+    })
 }
 
 module.exports = {
