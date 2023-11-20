@@ -21,16 +21,16 @@ const egV3SwapLog = {
 test('V2 Sync event log decoding test', () => {
   expect(iface.getEventTopic("Sync") === egV2SyncLog.topics[0]).toEqual(true);
   const evt = iface.decodeEventLog("Sync", egV2SyncLog.data, egV2SyncLog.topics);
-  expect(evt.reserve0).toEqual(ethers.BigNumber.from("30109115928"));
-  expect(evt.reserve1).toEqual(ethers.BigNumber.from("122094547351972"));
+  expect(evt.reserve0.toString()).toEqual("30109115928");
+  expect(evt.reserve1.toString()).toEqual("122094547351972");
 })
 
 test('V3 Swap event log decoding test', () => {
   expect(iface.getEventTopic("Swap") === egV3SwapLog.topics[0]).toEqual(true);
   const evt = iface.decodeEventLog("Swap", egV3SwapLog.data, egV3SwapLog.topics);
-  expect(evt.amount0).toEqual(ethers.BigNumber.from("-1902696"));
-  expect(evt.amount1).toEqual(ethers.BigNumber.from("1902631"));
-  expect(evt.sqrtPriceX96).toEqual(ethers.BigNumber.from("79222820741311993859916520366"));
-  expect(evt.liquidity).toEqual(ethers.BigNumber.from("15637881163797723"));
+  expect(evt.amount0.toString()).toEqual("-1902696");
+  expect(evt.amount1.toString()).toEqual("1902631");
+  expect(evt.sqrtPriceX96.toString()).toEqual("79222820741311993859916520366");
+  expect(evt.liquidity.toString()).toEqual("15637881163797723");
   expect(evt.tick).toEqual(-2);
 })
