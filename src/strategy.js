@@ -19,7 +19,7 @@ const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSel
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
-const { findUpdatedPools, clipBigInt, displayStats } = require('./utils');
+const { findUpdatedPools, clipBigInt, displayStats, sqrtBigInt } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
 const { buildTx, buildBlankTx } = require('./bundler');
 const fs = require('fs');
@@ -319,7 +319,7 @@ async function main() {
                         address: checksumPoolAddress,
                         reserve0: BigInt(v2Evt.reserve0.toString()),
                         reserve1: BigInt(v2Evt.reserve1.toString()),
-                        liquidity: BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString())
+                        liquidity: sqrtBigInt(BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString()))
                     });
                     touchablePoolAddresses.push(checksumPoolAddress);
                 } else if (swapEvtTopic == log.topics[0]) {
@@ -361,8 +361,10 @@ async function main() {
                         }
                     }
                     for (let estimatedPool of touchablePoolsV3) {
-                        pool.extra.sqrtPriceX96 = estimatedPool.sqrtPriceX96;
-                        pool.extra.liquidity = estimatedPool.liquidity;
+                        if (estimatedPool.address == pool.address) {
+                            pool.extra.sqrtPriceX96 = estimatedPool.sqrtPriceX96;
+                            pool.extra.liquidity = estimatedPool.liquidity;
+                        }
                     }
                 }
             }
