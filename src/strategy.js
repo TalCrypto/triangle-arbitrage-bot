@@ -257,8 +257,6 @@ async function main() {
         }
     });
 
-    const poolAddresses = Object.keys(pools).map(poolId => pools[poolId].address).map(addr => addr.toLowerCase());
-
     // we consider only the swap events to find the opportunity
     const iface = new ethers.utils.Interface([
         'event Sync(uint112 reserve0, uint112 reserve1)',
@@ -296,7 +294,10 @@ async function main() {
 
             if (!response.logs || response.logs.length == 0) return;
 
-            const poolEventLogs = response.logs.filter(log => poolAddresses.includes(log.address.toLowerCase()));
+            const syncEvtTopic = iface.getEventTopic("Sync");
+            const swapEvtTopic = iface.getEventTopic("Swap");
+
+            const poolEventLogs = response.logs.filter(log => syncEvtTopic == log.topics[0] || swapEvtTopic == log.topics[0]);
 
             if (poolEventLogs.length == 0) return;
 
@@ -306,7 +307,7 @@ async function main() {
 
             for (let log of poolEventLogs) {
                 const checksumPoolAddress = ethers.utils.getAddress(log.address);
-                if (iface.getEventTopic("Sync") == log.topics[0]) {
+                if (syncEvtTopic == log.topics[0]) {
                     const v2Evt = iface.decodeEventLog("Sync", log.data, log.topics);
                     touchablePoolsV2.push({
                         address: checksumPoolAddress,
@@ -315,7 +316,7 @@ async function main() {
                         liquidity: BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString())
                     });
                     touchablePoolAddresses.push(checksumPoolAddress);
-                } else if (iface.getEventTopic("Swap") == log.topics[0]) {
+                } else if (swapEvtTopic == log.topics[0]) {
                     const v3Evt = iface.decodeEventLog("Swap", log.data, log.topics);
                     touchablePoolsV3.push({
                         address: checksumPoolAddress,
