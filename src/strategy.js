@@ -245,6 +245,9 @@ async function main() {
                 return;
             }
 
+            // The promises should have long resolved by now, grab the values.
+            await Promise.all([pricePromise, txPromise]);
+
         } catch (e) {
             logger.error(`Error while processing block #${blockNumber}: ${e}`);
         } finally {
@@ -409,9 +412,6 @@ async function main() {
                 logger.info(`Path has ${path.pools.length} pools, skipping transaction ${pendingTx}`);
                 return;
             }
-
-            // The promises should have long resolved by now, grab the values.
-            await Promise.all([pricePromise, txPromise]);
 
             // Make sure that we are still working on the latest block
             if (blockNumber < lastBlockNumber) {
