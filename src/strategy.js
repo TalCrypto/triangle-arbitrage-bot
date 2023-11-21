@@ -458,8 +458,8 @@ async function main() {
 
             // Wait for all the promises to resolve
             logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s after block #${blockNumber}`);
-            await Promise.all(promises);
-            logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
+            // await Promise.all(promises);
+            // logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
             lastTxCount++;
         } catch (e) {
             logger.error(`Error while processing transaction ${pendingTx}: ${e}`);
