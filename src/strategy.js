@@ -297,7 +297,8 @@ async function main() {
             const syncEvtTopic = iface.getEventTopic("Sync");
             const swapEvtTopic = iface.getEventTopic("Swap");
 
-            const poolEventLogs = response.logs.filter(log => syncEvtTopic == log.topics[0] || swapEvtTopic == log.topics[0]);
+            // the first element of topic array of log represents the hash of event topic
+            const poolEventLogs = response.logs.filter(log => log.topics[0] == syncEvtTopic || log.topics[0] == swapEvtTopic);
 
             if (poolEventLogs.length == 0) return;
 
