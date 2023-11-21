@@ -158,17 +158,6 @@ async function main() {
             lastBlockNumber = blockNumber;
         }
 
-        // Pre-fetch the gas price and tx count for the new block
-        let pricePromise = wsProvider.getGasPrice();
-        pricePromise.then((price) => {
-            lastGasPrice = price;
-        });
-        let txPromise = wsProvider.getTransactionCount(SENDER_ADDRESS);
-        txPromise.then((txCount) => {
-            lastTxCount = txCount;
-        });
-
-
         try {
             logger.info(`=== New Block #${blockNumber}`);
 
@@ -448,21 +437,24 @@ async function main() {
             // Use JSON-RPC instead of ethers.js to send the signed transaction
             let tipPercent = 200;
             let start = Date.now();
+            lastGasPrice = await wsProvider.getGasPrice();
+            lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS)
             let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
 
             // Send the transaction
-            let promises = [];
-            let successCount = 0;
-            let failedEndpoints = [];
-            promises = promises.concat(providers.map((pvdr) => pvdr.send("eth_sendRawTransaction", txObject)));
-            promises.forEach((promise, index) => {
-                promise.then(() => {
-                    successCount++;
-                }).catch((e) => {
-                    failedEndpoints.push(HTTPS_ENDPOINTS[index]);
-                    logger.error(`Error while sending to ${HTTPS_ENDPOINTS[index]}: ${e}`);
-                });
-            });
+            await wsProvider.send("eth_sendRawTransaction", txObject);
+            // let promises = [];
+            // let successCount = 0;
+            // let failedEndpoints = [];
+            // promises = promises.concat(providers.map((pvdr) => pvdr.send("eth_sendRawTransaction", txObject)));
+            // promises.forEach((promise, index) => {
+            //     promise.then(() => {
+            //         successCount++;
+            //     }).catch((e) => {
+            //         failedEndpoints.push(HTTPS_ENDPOINTS[index]);
+            //         logger.error(`Error while sending to ${HTTPS_ENDPOINTS[index]}`);
+            //     });
+            // });
 
             // Wait for all the promises to resolve
             logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s after block #${blockNumber}`);
