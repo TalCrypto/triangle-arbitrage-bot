@@ -270,7 +270,7 @@ async function main() {
         if (!txnData) return;
 
         // clone pathsByPool to modify it with estimated values without affecting the original object that are updated evey block
-        const clonedPathsByPool = structuredClone(pathsByPool);
+        let clonedPathsByPool = structuredClone(pathsByPool);
         try {
             // simulate the pending transaction
             // doesn't change the EVM states of mainnet, hence there is no gas costs
@@ -441,7 +441,7 @@ async function main() {
         } catch (e) {
             logger.error(`Error while processing transaction ${pendingTx}: ${e}`);
         } finally {
-            delete clonedPathsByPool;
+            clonedPathsByPool = null;
         }
     })
 }
