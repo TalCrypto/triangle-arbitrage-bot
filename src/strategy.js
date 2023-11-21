@@ -428,8 +428,8 @@ async function main() {
             promise.then(() => {
                 successCount++;
             }).catch((e) => {
-                failedEndpoints.push(HTTP_ENDPOINTS[index]);
-                logger.error(`Error while sending to ${HTTP_ENDPOINTS[index]}: ${e}`);
+                failedEndpoints.push(HTTPS_ENDPOINTS[index]);
+                logger.error(`Error while sending to ${HTTPS_ENDPOINTS[index]}: ${e}`);
             });
         });
 
