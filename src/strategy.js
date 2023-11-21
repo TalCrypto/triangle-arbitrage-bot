@@ -292,13 +292,28 @@ async function main() {
 
             const blockNumber = await wsProvider.getBlockNumber();
 
-            if (!response.logs || response.logs.length == 0) return;
+            let logs = []
+            // extract logs from the simulation response
+            function extractLogs(callObj) {
+                if (callObj['logs']) {
+                    logs = logs.concat(callObj['logs']);
+                }
+                if (callObj['calls']) {
+                    for (let obj of callObj['calls']) {
+                        extractLogs(obj);
+                    }
+                }
+                return;
+            }
+            extractLogs(response);
+
+            if (logs.length == 0) return;
 
             const syncEvtTopic = iface.getEventTopic("Sync");
             const swapEvtTopic = iface.getEventTopic("Swap");
 
             // the first element of topic array of log represents the hash of event topic
-            const poolEventLogs = response.logs.filter(log => log.topics[0] == syncEvtTopic || log.topics[0] == swapEvtTopic);
+            const poolEventLogs = logs.filter(log => log.topics[0] == syncEvtTopic || log.topics[0] == swapEvtTopic);
 
             if (poolEventLogs.length == 0) return;
 
