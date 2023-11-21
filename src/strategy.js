@@ -10,7 +10,8 @@ const {
     TRADE_CONTRACT_ADDRESS,
     SAFE_TOKENS,
     CHAIN_ID,
-    HTTP_ENDPOINTS,
+    HTTPS_ENDPOINTS,
+    WS_LOCAL
 } = require('./constants');
 
 const { logger } = require('./constants');
@@ -28,7 +29,7 @@ const path = require('path');
 async function main() {
     logger.info("Program started");
     const wsProvider = new ethers.providers.WebSocketProvider(WS_LOCAL);
-    let providers = HTTP_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
+    let providers = HTTPS_ENDPOINTS.map(endpoint => new ethers.providers.JsonRpcProvider(endpoint));
     providers = providers.concat([wsProvider]);
     const factoryAddresses_v2 = [
         '0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32', // QuickSwap
