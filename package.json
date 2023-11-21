@@ -4,7 +4,7 @@
   "description": "MEV bot script written in Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -37,6 +37,7 @@
     "dotenv": "^16.3.1",
     "ethers": "^5.7.2",
     "fs": "^0.0.1-security",
+    "jest": "^29.7.0",
     "uuid": "^9.0.0",
     "winston": "^3.10.0"
   }

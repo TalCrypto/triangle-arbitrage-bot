@@ -187,6 +187,7 @@ async function main() {
 
                 }
             }
+
             logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
             // Check if we are still working on the latest block
@@ -203,7 +204,7 @@ async function main() {
             if (fetchPools.length > 0) {
                 logger.info(`Fetching reserves for ${fetchPools.length} involved pools. Block #${blockNumber}`);
                 s = new Date();
-                await batchReserves(wsProvider, pools, fetchPools, 100, 5, blockNumber);
+                await batchReserves(wsProvider, pools, fetchPools, 1000, 5, blockNumber);
                 e = new Date();
                 dataStore.reserves.push(e - s);
                 logger.info(`${(e - s) / 1000} s - Batch reserves call. Block #${blockNumber}`);
