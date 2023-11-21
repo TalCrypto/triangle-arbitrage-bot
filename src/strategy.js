@@ -225,18 +225,6 @@ async function main() {
                 dataStore.block = [];
                 hasRefreshed = true;
             }
-
-            let elapsed = new Date() - sblock;
-
-            // Make sure that there are paths to evaluate.
-            if (touchedPaths.length == 0) {
-                logger.info(`No touched paths, skipping block #${blockNumber}`);
-                return;
-            }
-
-            // The promises should have long resolved by now, grab the values.
-            await Promise.all([pricePromise, txPromise]);
-
         } catch (e) {
             logger.error(`Error while processing block #${blockNumber}: ${e}`);
         } finally {
