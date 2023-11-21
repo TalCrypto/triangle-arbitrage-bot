@@ -198,7 +198,7 @@ async function main() {
 
                 }
             }
-            console.dir(touchedPaths, { depth: 100 });
+
             logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
             // Check if we are still working on the latest block
@@ -349,11 +349,6 @@ async function main() {
         let profitablePaths = [];
         logger.info(`Evaluating ${touchablePaths.length} touchable paths. Block #${blockNumber}`);
         for (let path of touchablePaths) {
-            if (path.pools.length == 2) {
-                console.log('path')
-                console.dir(path, { depth: 5 })
-            }
-
             let amountIn = optimizeAmountIn(path);
             if (amountIn === 0n) continue; // Grossly unprofitable
 
