@@ -270,7 +270,6 @@ async function main() {
         if (!txnData) return;
 
         // clone pathsByPool to modify it with estimated values without affecting the original object that are updated evey block
-        let clonedPathsByPool = structuredClone(pathsByPool);
         try {
             // simulate the pending transaction
             // doesn't change the EVM states of mainnet, hence there is no gas costs
@@ -299,33 +298,27 @@ async function main() {
             if (poolEventLogs.length == 0) return;
 
             const touchablePoolAddresses = [];
+            const touchablePoolsV2 = [];
+            const touchablePoolsV3 = [];
 
-            // check if the simulated event logs will touch the pools we observe
-            // if it does, modify clonedPathsByPool with the estimated values
             for (let log of poolEventLogs) {
                 const checksumPoolAddress = ethers.utils.getAddress(log.address);
                 if (iface.getEventTopic("Sync") == log.topics[0]) {
                     const v2Evt = iface.decodeEventLog("Sync", log.data, log.topics);
-                    for (let path of clonedPathsByPool[checksumPoolAddress]) {
-                        for (let pool of path.pools) {
-                            if (pool.address == checksumPoolAddress) {
-                                pool.extra.reserve0 = BigInt(v2Evt.reserve0.toString());
-                                pool.extra.reserve1 = BigInt(v2Evt.reserve1.toString());
-                                pool.extra.liquidity = BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString());
-                            }
-                        }
-                    }
+                    touchablePoolsV2.push({
+                        address: checksumPoolAddress,
+                        reserve0: BigInt(v2Evt.reserve0.toString()),
+                        reserve1: BigInt(v2Evt.reserve1.toString()),
+                        liquidity: BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString())
+                    });
                     touchablePoolAddresses.push(checksumPoolAddress);
                 } else if (iface.getEventTopic("Swap") == log.topics[0]) {
                     const v3Evt = iface.decodeEventLog("Swap", log.data, log.topics);
-                    for (let path of clonedPathsByPool[checksumPoolAddress]) {
-                        for (let pool of path.pools) {
-                            if (pool.address == checksumPoolAddress) {
-                                pool.extra.sqrtPriceX96 = BigInt(v3Evt.sqrtPriceX96.toString());
-                                pool.extra.liquidity = BigInt(evt.liquidity.toString());
-                            }
-                        }
-                    }
+                    touchablePoolsV3.push({
+                        address: checksumPoolAddress,
+                        sqrtPriceX96: BigInt(v3Evt.sqrtPriceX96.toString()),
+                        liquidity: BigInt(evt.liquidity.toString())
+                    })
                     touchablePoolAddresses.push(checksumPoolAddress);
                 }
             }
@@ -344,11 +337,29 @@ async function main() {
                 }
             }
 
+            // clone touchablePaths and modify it with the estimate values so that the paths won't be changed that is only updated evey block
+            const clonedTouchablePaths = structuredClone(touchablePaths);
+            for (let path of clonedTouchablePaths) {
+                for (let pool of path.pools) {
+                    for (let estimatedPool of touchablePoolsV2) {
+                        if (estimatedPool.address == pool.address) {
+                            pool.extra.reserve0 = estimatedPool.reserve0;
+                            pool.extra.reserve1 = estimatedPool.reserve1;
+                            pool.extra.liquidity = estimatedPool.liquidity;
+                        }
+                    }
+                    for (let estimatedPool of touchablePoolsV3) {
+                        pool.extra.sqrtPriceX96 = estimatedPool.sqrtPriceX96;
+                        pool.extra.liquidity = estimatedPool.liquidity;
+                    }
+                }
+            }
+
             // For each path, compute the optimal amountIn to trade, and the profit
             s = new Date();
             let profitablePaths = [];
-            logger.info(`Evaluating ${touchablePaths.length} touchable paths. Block #${blockNumber}`);
-            for (let path of touchablePaths) {
+            logger.info(`Evaluating ${clonedTouchablePaths.length} touchable paths. Block #${blockNumber}`);
+            for (let path of clonedTouchablePaths) {
                 let amountIn = optimizeAmountIn(path);
                 if (amountIn === 0n) continue; // Grossly unprofitable
 
@@ -440,8 +451,6 @@ async function main() {
             lastTxCount++;
         } catch (e) {
             logger.error(`Error while processing transaction ${pendingTx}: ${e}`);
-        } finally {
-            clonedPathsByPool = null;
         }
     })
 }
