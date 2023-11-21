@@ -26,7 +26,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
             } else {
                 throw new Error(`Invalid URL format: ${providerUrl}`);
             }
-            
+
             let blockPromise = provider.getBlockNumber();
             const timeOut = 2000;
             let timeOutPromise = new Promise((resolve, reject) => {
@@ -35,13 +35,13 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
                 }, timeOut);
             });
             await Promise.race([blockPromise, timeOutPromise]);
-            
+
             console.log(`${providerUrl} is working correctly.`);
-            
+
         } catch (error) {
             console.error(`Provider ${providerUrl} is not working correctly. Error: ${error.message}`);
-        } 
-        
+        }
+
     }
 
     // Check if the rpc endpoints are working correctly
@@ -92,7 +92,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
                         providerBlockTime[providerUrl] = {};
                     }
 
-                    if(!blockProviderTime[blockNumber][providerUrl]) {
+                    if (!blockProviderTime[blockNumber][providerUrl]) {
                         blockProviderTime[blockNumber][providerUrl] = tEnd;
                         providerBlockTime[providerUrl][blockNumber] = tEnd;
                         if (!providerRequestDurations[providerUrl]) {
@@ -118,7 +118,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
                     setTimeout(probeFunction, P);
                 }
             }
-            
+
             probeFunction();
             runningHttpProviderCount++;
         }
@@ -132,22 +132,22 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
 
             let provider = new ethers.providers.WebSocketProvider(providerUrl);
             const t0 = new Date().getTime();
-        
+
             provider.on('block', (blockNumber) => {
                 let t1 = new Date().getTime();
-                
+
                 if (!blockProviderTime[blockNumber]) {
                     blockProviderTime[blockNumber] = {};
                 }
                 if (!providerBlockTime[providerUrl]) {
                     providerBlockTime[providerUrl] = {};
                 }
-        
-                if(!blockProviderTime[blockNumber][providerUrl]) {
+
+                if (!blockProviderTime[blockNumber][providerUrl]) {
                     blockProviderTime[blockNumber][providerUrl] = t1;
                     providerBlockTime[providerUrl][blockNumber] = t1;
-                    
-                } else if(blockProviderTime[blockNumber][providerUrl] > t1) {
+
+                } else if (blockProviderTime[blockNumber][providerUrl] > t1) {
                     console.log(`Error: Block regression detected ! Provider ${providerUrl} | Block ${blockNumber} | Time saved ${blockProviderTime[blockNumber][providerUrl]} | Time now ${t1}`);
                 }
 
@@ -170,7 +170,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
         }
     }
 
-    setInterval(function() {
+    setInterval(function () {
         // If the probe is not running anymore, stop the interval
         if (runningHttpProviderCount == 0 && runningWsProviderCount == 0) {
             clearInterval(this);
@@ -210,7 +210,7 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
                 }
             }
         }
-        
+
         // Print the average block propagation latency for each provider
         console.log("=== Individual provider latency ===")
         let providerLatency = [];
@@ -249,12 +249,49 @@ async function profileBlockArrivals(probeDuration = 5 * 60 * 1000) { // 5 minute
         }
 
         console.log("====================================\n");
-    }, 1000*10); // Print latency every 10 seconds
-    
+    }, 1000 * 10); // Print latency every 10 seconds
+
     probeHttpProviders(probeDuration);
     listenWsProviders(probeDuration);
 }
 
+async function profileMempool(wssUrl, numBlocks) {
+    const wssProvider = new ethers.providers.WebSocketProvider(wssUrl);
+    let pendingTransactions = [];
+    let blocks = 0
+    let numTotalMinedTx = 0;
+    let numTotalMemedTx = 0;
+
+    wssProvider.on("block", async (blockNumber) => {
+        if (blocks == 0 || blocks == 1 || blocks == 2) {
+            blocks++;
+            // ignore the first 3 block
+            return;
+        }
+        if (blocks == Number(numBlocks) + 3) {
+            console.log(`Total mined tx: ${numTotalMinedTx}`);
+            console.log(`Total tx from mempool: ${numTotalMemedTx}`);
+            console.log(`Mempool accuracy: ${(numTotalMemedTx / numTotalMinedTx * 100).toFixed(2)}%`)
+            process.exit(0);
+        }
+        const blockData = await wssProvider.getBlock(blockNumber);
+        const minedTxs = blockData.transactions.map(tx => tx.toLocaleLowerCase());
+        const numMinedTx = minedTxs.length;
+        const numMemedTx = minedTxs.filter(tx => pendingTransactions.includes(tx)).length;
+        numTotalMinedTx += numMinedTx;
+        numTotalMemedTx += numMemedTx;
+        console.log(`#block ${blockNumber} - num tx from mempool / num tx mined: ${numMemedTx}/${numMinedTx}`);
+        blocks++;
+    });
+
+    wssProvider.on("pending", async (pendingTx) => {
+        const txnData = await wssProvider.getTransaction(pendingTx);
+        if (!txnData) return;
+        pendingTransactions = pendingTransactions.concat([pendingTx.toLocaleLowerCase()]);
+    })
+}
+
 module.exports = {
     profileBlockArrivals,
+    profileMempool
 }

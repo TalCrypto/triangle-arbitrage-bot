@@ -1,5 +1,5 @@
 const { main } = require('./src/strategy');
-const { profileBlockArrivals } = require('./src/profiler');
+const { profileBlockArrivals, profileMempool } = require('./src/profiler');
 
 // Check if flag build is set
 const args = process.argv.slice(2);
@@ -46,7 +46,7 @@ if (buildFlag == "-build" || buildFlag == "-b") {
             archive.file(`data/${dataFile}`, { name: `data/${dataFile}` });
         }
     }
-    
+
     archive.finalize();
     return;
 
@@ -60,7 +60,12 @@ if (buildFlag == "-build" || buildFlag == "-b") {
     // Profile block arrivals
     profileBlockArrivals(probeDuration * 60 * 1000);
 
-} else if (!buildFlag) {
+} else if (buildFlag == "-mempool") {
+    const wssURL = args[1];
+    const numBlocks = args[2];
+    profileMempool(wssURL, numBlocks);
+}
+else if (!buildFlag) {
     // Run the bot. First, check if the .env file exists
     const dotenv = require('dotenv');
     const fs = require('fs');
@@ -68,18 +73,18 @@ if (buildFlag == "-build" || buildFlag == "-b") {
         console.log("No .env file found. Please create one.");
         return;
     }
-    
+
     // Check wether all the modules are installed
     // const { exec } = require('child_process');
     // exec('npm install', (err, stdout, stderr) => {
     //     if (err) {
     //         console.log("Error installing modules. Error: ", err);
     //         return;
-    
+
     //     }
     //     console.log("Modules installed. Starting bot...");
     // });
-    
+
     (async () => {
         // Start the bot by running the "main" function of strategy.js
         await main();
