@@ -333,9 +333,9 @@ async function main() {
             const MAX_PATH_EVALUATION = 500; // Share that value between each touchable pool
             let touchablePaths = [];
             for (let poolAddress of touchablePoolAddresses) {
-                if (poolAddress in clonedPathsByPool) {
+                if (poolAddress in pathsByPool) {
                     // Find the new paths, check if they are not already in touchedPaths
-                    let newPaths = preSelectPaths(clonedPathsByPool[poolAddress], MAX_PATH_EVALUATION / touchablePoolAddresses.length, 0.5);
+                    let newPaths = preSelectPaths(pathsByPool[poolAddress], MAX_PATH_EVALUATION / touchablePoolAddresses.length, 0.5);
 
                     // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
                     newPaths = newPaths.filter(path => !touchablePaths.includes(path));
