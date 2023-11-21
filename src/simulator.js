@@ -191,51 +191,46 @@ function computeProfit(amountIn, path) {
 // Find the optimal input amount for an arbitrage path.
 function optimizeAmountIn(path) {
     // To find the local maximum, we calculate the derivative of the profit function at the middle point of the interval. Assume the profit function is convex.
-    let min = BigInt(0);
-    let max = BigInt(10 ** 30);
-  
-    while (computeProfit(max, path) < 0) {
-      max = max / 10n;
-    }
-    while (computeProfit(max, path) > 0) {
-      max = max * 2n;
-    }
-    while (computeProfit(max, path) < 0) {
-      max = (max * 10n) / 13n;
-    }
-  
+    let min = BigInt(1000);
+    let max = BigInt(10 ** 30); // = 2**100
+    let stepsMax = 100;
+
     // Use whichever is larger.
     let alpha = 1e-6; // relative step size
-    let beta = 500; // absolute step size
-  
+    let beta = 100; // absolute step size
+
     // Test, needs improvement.
     function h(x) {
-      return BigInt(Math.floor(Math.max(alpha * Number(x), beta)));
+        return BigInt(Math.floor(Math.max(alpha * Number(x), beta)));
     }
-  
-    //true if x is less than ideal point.
-    function check(x) {
-      return computeProfit(x + h(x), path) > computeProfit(x, path);
-    }
-    while (true) {
-      if (check(max)) {
-        return max;
-      }
-      if (!check(min)) {
+
+    // Compute the profit and the derivative at the minimum.
+    let minProfit = computeProfit(min, path);
+    let minDerivative = computeProfit(min + h(min), path) - minProfit;
+
+    if (minDerivative < 0n) {
+        // If the profit is negative and the derivative is negative, the maximum is at the minimum.
         return min;
-      }
-      if (max < min + h(min)) {
-        return BigInt(Math.floor((Number(min) + Number(max)) / 2));
-      }
-      let mid = (min + max) / BigInt(2);
-      if (check(mid)) {
-        min = mid;
-      } else {
-        max = mid;
-      }
-      // console.log(min, max);
+    } 
+
+    // When the derivative at middle point is positive, we know the maximum is in the interval [mid, max]. The same applies to the reverse direction.
+    let mid;
+    let midDerivative;
+    for (let i = 0; i < stepsMax; i++) {
+        mid = (min + max) / BigInt(2);
+        midProfit = computeProfit(mid, path);
+        midDerivative = computeProfit(mid + h(mid), path) - midProfit;
+
+        if (midDerivative > 0) {
+            min = mid;
+        } else {
+            max = mid;
+        }
     }
-  }
+
+    return mid;
+}
+
 module.exports = {
     UniswapV2Simulator,
     exactTokensOut,

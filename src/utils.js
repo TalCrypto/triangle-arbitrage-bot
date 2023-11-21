@@ -122,6 +122,7 @@ async function findUpdatedPools(provider, blockNumber, pools, tokens) {
             const symbol0 = tokens[poolData.token0].symbol;
             const symbol1 = tokens[poolData.token1].symbol;
             poolAddresses.push(resLog.log.address);
+            
             let strData = "";
             const logs = resLog.parsed.args;
             // Logs is array-like with some named members. Print only the named members. (both key and value).
