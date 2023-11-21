@@ -264,6 +264,7 @@ async function main() {
     ])
 
     wsProvider.on('pending', async (pendingTx) => {
+        let sblock = new Date();
         const txnData = await wsProvider.getTransaction(pendingTx);
 
         // the local node can't get the tranaction data if it has been announced
@@ -337,7 +338,7 @@ async function main() {
                     touchablePoolsV3.push({
                         address: checksumPoolAddress,
                         sqrtPriceX96: BigInt(v3Evt.sqrtPriceX96.toString()),
-                        liquidity: BigInt(evt.liquidity.toString())
+                        liquidity: BigInt(v3Evt.liquidity.toString())
                     })
                     touchablePoolAddresses.push(checksumPoolAddress);
                 }
