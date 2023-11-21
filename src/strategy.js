@@ -322,7 +322,9 @@ async function main() {
                     touchablePoolAddresses.push(checksumPoolAddress);
                 }
             }
-
+            if (touchablePoolAddresses.length > 0) {
+                logger.info(`===== Found an opportunity transaction ${pendingTx}: ${touchablePoolAddresses.length} touchable pools =====`);
+            }
             // Find paths that use the touchable pools
             const MAX_PATH_EVALUATION = 500; // Share that value between each touchable pool
             let touchablePaths = [];
