@@ -11,7 +11,9 @@ const {
     SAFE_TOKENS,
     CHAIN_ID,
     HTTPS_ENDPOINTS,
-    WS_LOCAL
+    WS_LOCAL,
+    MULTICALL_ABI,
+    MULTICALL_ADDRESS
 } = require('./constants');
 
 const { logger } = require('./constants');
@@ -234,11 +236,11 @@ async function main() {
         }
     });
 
-    // we consider only the swap events to find the opportunity
-    const iface = new ethers.utils.Interface([
-        'event Sync(uint112 reserve0, uint112 reserve1)',
-        'event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)'
-    ])
+
+
+    const multiCallInterface = new ethers.utils.Interface(MULTICALL_ABI);
+
+    let pendingSwapTxData = []
 
     wsProvider.on('pending', async (pendingTx) => {
         let sblock = new Date();
@@ -247,6 +249,13 @@ async function main() {
         // the local node can't get the tranaction data if it has been announced
         // so we skip in this case
         if (!txnData) return;
+
+        const txRecp = await wsProvider.getTransactionReceipt(pendingTx);
+
+        // Make sure the pending transaction hasn't been mined
+        if (txRecp !== null) {
+            return;
+        }
 
         try {
             // simulate the pending transaction
@@ -280,36 +289,67 @@ async function main() {
             touchablePoolsV2 = poolInfo.touchablePoolsV2;
             touchablePoolsV3 = poolInfo.touchablePoolsV3;
 
-            if (poolEventLogs.length == 0) return;
-
-            const touchablePoolAddresses = [];
-            const touchablePoolsV2 = [];
-            const touchablePoolsV3 = [];
-
-            for (let log of poolEventLogs) {
-                const checksumPoolAddress = ethers.utils.getAddress(log.address);
-                if (syncEvtTopic == log.topics[0]) {
-                    const v2Evt = iface.decodeEventLog("Sync", log.data, log.topics);
-                    touchablePoolsV2.push({
-                        address: checksumPoolAddress,
-                        reserve0: BigInt(v2Evt.reserve0.toString()),
-                        reserve1: BigInt(v2Evt.reserve1.toString()),
-                        liquidity: sqrtBigInt(BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString()))
-                    });
-                    touchablePoolAddresses.push(checksumPoolAddress);
-                } else if (swapEvtTopic == log.topics[0]) {
-                    const v3Evt = iface.decodeEventLog("Swap", log.data, log.topics);
-                    touchablePoolsV3.push({
-                        address: checksumPoolAddress,
-                        sqrtPriceX96: BigInt(v3Evt.sqrtPriceX96.toString()),
-                        liquidity: BigInt(v3Evt.liquidity.toString())
-                    })
-                    touchablePoolAddresses.push(checksumPoolAddress);
-                }
-            }
             if (touchablePoolAddresses.length > 0) {
-                logger.info(`===== Found an opportunity transaction ${pendingTx}: ${touchablePoolAddresses.length} touchable pools =====`);
+                logger.info(`===== Found an opportunity transaction ${pendingTx} : ${touchablePoolAddresses.length} touchable pools =====`);
+                pendingSwapTxData.push(txnData);
+            } else return;
+
+            // if there are over 1 swap pendings, then simulate them with multicall smart contract
+            if (pendingSwapTxData.length > 1) {
+
+                // filter transactions that are not mined yet
+                const tempWithFilter = await Promise.all(pendingSwapTxData.map(async (txData) => {
+                    const receipt = await wsProvider.getTransactionReceipt(txData['hash']);
+                    return {
+                        value: txData,
+                        filter: receipt === null ?? false
+                    };
+                }));
+                pendingSwapTxData = tempWithFilter.filter(e => e.filter).map(e => e.value);
+
+                // sort pending transactions by the gas price
+                pendingSwapTxData.sort((a, b) => {
+                    if (b['gasPrice'].gt(a['gasPrice'])) {
+                        return 1;
+                    } else {
+                        return 0
+                    }
+                });
+
+                // simulate multi pending tx with the multicall smart contract
+                const calls = pendingSwapTxData.map(txData => ({
+                    target: txData['to'],
+                    allowFailure: true,
+                    callData: txData['data']
+                }));
+                const multiResp = await wsProvider.send(
+                    "debug_traceCall",
+                    [
+                        {
+                            to: MULTICALL_ADDRESS,
+                            data: multiCallInterface.encodeFunctionData("aggregate3", [calls]),
+                        },
+                        "latest",
+                        {
+                            tracer: "callTracer",
+                            tracerConfig: { withLog: true }
+                        }
+                    ]
+                );
+
+                // extract logs from the multi call simulation
+                logs = extractLogsFromSimulation(multiResp);
+
+                // get pool infos from the log
+                const poolInfoWithMulti = getPoolsFromLogs(logs);
+                touchablePoolAddresses = poolInfoWithMulti.touchablePoolAddresses;
+                touchablePoolsV2 = poolInfoWithMulti.touchablePoolsV2;
+                touchablePoolsV3 = poolInfoWithMulti.touchablePoolsV3;
             }
+
+            // skip if the pools are not syned
+            if (!hasRefreshed) return;
+
             // Find paths that use the touchable pools
             const MAX_PATH_EVALUATION = 500; // Share that value between each touchable pool
             let touchablePaths = [];
@@ -403,8 +443,8 @@ async function main() {
             const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
             lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS)
-            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, txnData['gasPrice']);
-            const [blockNumber, txRecp] = await Promise.all([wsProvider.getBlockNumber(), wsProvider.getTransactionReceipt(pendingTx)]);
+            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, txnData['gasPrice'].mul(8).div(10));
+            const blockNumber = await wsProvider.getBlockNumber();
 
             // Make sure the pending transaction hasn't been mined
             if (txRecp !== null) {
@@ -415,7 +455,8 @@ async function main() {
             logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 2} `);
 
             // Send the transaction
-            await wsProvider.send("eth_sendRawTransaction", txObject);
+            const tx = await wsProvider.send("eth_sendRawTransaction", txObject);
+            // fs.writeFileSync(`data/transactions_${blockNumber}.json`, JSON.stringify({ oppo: pendingTx, arbi: tx }));
             // let promises = [];
             // let successCount = 0;
             // let failedEndpoints = [];
