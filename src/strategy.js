@@ -268,8 +268,6 @@ async function main() {
                 ]
             );
 
-            const blockNumber = await wsProvider.getBlockNumber();
-
             let logs = []
             // extract logs from the simulation response
             function extractLogs(callObj) {
@@ -360,7 +358,7 @@ async function main() {
             // For each path, compute the optimal amountIn to trade, and the profit
             s = new Date();
             let profitablePaths = [];
-            logger.info(`Evaluating ${clonedTouchablePaths.length} touchable paths. Block #${blockNumber}`);
+            logger.info(`Evaluating ${clonedTouchablePaths.length} touchable paths.`);
             for (let path of clonedTouchablePaths) {
                 let amountIn = optimizeAmountIn(path);
                 if (amountIn === 0n) continue; // Grossly unprofitable
@@ -388,7 +386,7 @@ async function main() {
             });
             const path = profitablePaths[0];
             e = new Date();
-            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths. Block #${blockNumber}`);
+            logger.info(`${(e - s) / 1000} s - Found ${profitablePaths.length} profitable paths`);
 
             if (path.profitusd < 0.02) {
                 // Profit of the best path is too low, skip arbitrage transaction
@@ -397,7 +395,7 @@ async function main() {
             }
 
             // Display the profitable path
-            logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei) / 10 ** SAFE_TOKENS[path.rootToken].decimals} block #${blockNumber}`);
+            logger.info(`Profitable path: $${path.profitusd} ${SAFE_TOKENS[path.rootToken].symbol} ${Number(path.profitwei) / 10 ** SAFE_TOKENS[path.rootToken].decimals}`);
 
             // Store profit in profitStore
             profitStore[path.rootToken] += path.profitwei
@@ -409,15 +407,6 @@ async function main() {
                 logger.info(`Path has ${path.pools.length} pools, skipping transaction ${pendingTx}`);
                 return;
             }
-
-            // Make sure that we are still working on the latest block
-            if (blockNumber < lastBlockNumber) {
-                logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
-                return;
-            }
-
-            // Send arbitrage transaction
-            logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 1} `);
 
             // Create a signer
             const signer = new ethers.Wallet(PRIVATE_KEY);
@@ -447,7 +436,7 @@ async function main() {
             // });
 
             // Wait for all the promises to resolve
-            logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s after block #${blockNumber}`);
+            logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s`);
             // await Promise.all(promises);
             // logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
             lastTxCount++;
