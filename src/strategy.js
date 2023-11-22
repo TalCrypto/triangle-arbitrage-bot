@@ -21,7 +21,7 @@ const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { findUpdatedPools, clipBigInt, displayStats, sqrtBigInt } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
-const { buildTx, buildBlankTx } = require('./bundler');
+const { buildTx, buildBlankTx, buildLegacyTx } = require('./bundler');
 const fs = require('fs');
 const path = require('path');
 
@@ -413,12 +413,17 @@ async function main() {
             const account = signer.connect(wsProvider);
             const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-            // Use JSON-RPC instead of ethers.js to send the signed transaction
-            let tipPercent = 200;
-            let start = Date.now();
-            lastGasPrice = await wsProvider.getGasPrice();
             lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS)
-            let txObject = await buildTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, lastGasPrice, tipPercent);
+            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, txnData['gasPrice']);
+            const [blockNumber, txRecp] = await Promise.all([wsProvider.getBlockNumber(), wsProvider.getTransactionReceipt(pendingTx)]);
+
+            // Make sure the pending transaction hasn't been mined
+            if (txRecp !== null) {
+                return;
+            }
+
+            // Send arbitrage transaction
+            logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 2} `);
 
             // Send the transaction
             await wsProvider.send("eth_sendRawTransaction", txObject);
@@ -439,7 +444,7 @@ async function main() {
             logger.info(`Finished sending. End-to-end delay ${(Date.now() - sblock) / 1000} s`);
             // await Promise.all(promises);
             // logger.info(`Successfully received by ${successCount} endpoints. E2E ${(Date.now() - start) / 1000} s. Tx hash ${await promises[0]} Block #${blockNumber}`);
-            lastTxCount++;
+            // lastTxCount++;
         } catch (e) {
             logger.error(`Error while processing transaction ${pendingTx}: ${e}`);
         }
