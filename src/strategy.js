@@ -19,7 +19,7 @@ const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSel
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
-const { findUpdatedPools, clipBigInt, displayStats, sqrtBigInt } = require('./utils');
+const { findUpdatedPools, clipBigInt, displayStats, extractLogsFromSimulation, getPoolsFromLogs } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
 const { buildTx, buildBlankTx, buildLegacyTx } = require('./bundler');
 const fs = require('fs');
@@ -248,7 +248,6 @@ async function main() {
         // so we skip in this case
         if (!txnData) return;
 
-        // clone pathsByPool to modify it with estimated values without affecting the original object that are updated evey block
         try {
             // simulate the pending transaction
             // doesn't change the EVM states of mainnet, hence there is no gas costs
@@ -268,28 +267,18 @@ async function main() {
                 ]
             );
 
-            let logs = []
-            // extract logs from the simulation response
-            function extractLogs(callObj) {
-                if (callObj['logs']) {
-                    logs = logs.concat(callObj['logs']);
-                }
-                if (callObj['calls']) {
-                    for (let obj of callObj['calls']) {
-                        extractLogs(obj);
-                    }
-                }
-                return;
-            }
-            extractLogs(response);
+            let logs = extractLogsFromSimulation(response)
 
             if (logs.length == 0) return;
 
-            const syncEvtTopic = iface.getEventTopic("Sync");
-            const swapEvtTopic = iface.getEventTopic("Swap");
+            let touchablePoolAddresses = [];
+            let touchablePoolsV2 = [];
+            let touchablePoolsV3 = [];
 
-            // the first element of topic array of log represents the hash of event topic
-            const poolEventLogs = logs.filter(log => log.topics[0] == syncEvtTopic || log.topics[0] == swapEvtTopic);
+            const poolInfo = getPoolsFromLogs(logs);
+            touchablePoolAddresses = poolInfo.touchablePoolAddresses;
+            touchablePoolsV2 = poolInfo.touchablePoolsV2;
+            touchablePoolsV3 = poolInfo.touchablePoolsV3;
 
             if (poolEventLogs.length == 0) return;
 

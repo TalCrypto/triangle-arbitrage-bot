@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 const axios = require('axios');
 
-const { 
+const {
     BLOCKNATIVE_TOKEN,
     CHAIN_ID,
     logger,
@@ -126,7 +126,7 @@ async function findUpdatedPools(provider, blockNumber, pools, tokens) {
             const logs = resLog.parsed.args;
             // Logs is array-like with some named members. Print only the named members. (both key and value).
             for (const [key, value] of Object.entries(logs)) {
-                if (isNaN(key)){
+                if (isNaN(key)) {
                     strData += `${key}: ${value} `;
                 }
             }
@@ -176,15 +176,15 @@ function clipBigInt(num, precision) {
 }
 
 // Display bot stats
-function displayStats(sessionStart, logger, tokens, dataStore, profitStore){
+function displayStats(sessionStart, logger, tokens, dataStore, profitStore) {
     logger.info("===== Profit Recap =====")
     let sessionDuration = (new Date() - sessionStart) / 1000;
     logger.info(`Session duration: ${sessionDuration} seconds (${sessionDuration / 60} minutes) (${sessionDuration / 60 / 60} hours)`);
-    
+
     // For each token, display the profit in decimals
     for (let token in profitStore) {
-        let profit = Number(profitStore[token]) / 10**tokens[token].decimals;
-        logger.info(`${tokens[token].symbol}: ${profit} $${profit*tokens[token].usd} (${token})`);
+        let profit = Number(profitStore[token]) / 10 ** tokens[token].decimals;
+        logger.info(`${tokens[token].symbol}: ${profit} $${profit * tokens[token].usd} (${token})`);
     }
     logger.info("========================")
 
@@ -208,6 +208,64 @@ function displayStats(sessionStart, logger, tokens, dataStore, profitStore){
     logger.info("//////////////////////")
 }
 
+function extractLogsFromSimulation(response) {
+    let logs = []
+    // extract logs from the simulation response
+    function extractLogs(callObj) {
+        if (callObj['logs']) {
+            logs = logs.concat(callObj['logs']);
+        }
+        if (callObj['calls']) {
+            for (let obj of callObj['calls']) {
+                extractLogs(obj);
+            }
+        }
+        return;
+    }
+    extractLogs(response);
+    return logs;
+}
+
+// we consider only the swap events to find the opportunity
+const iface = new ethers.utils.Interface([
+    'event Sync(uint112 reserve0, uint112 reserve1)',
+    'event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)'
+])
+
+function getPoolsFromLogs(logs) {
+    const touchablePoolAddresses = [];
+    const touchablePoolsV2 = [];
+    const touchablePoolsV3 = [];
+
+    const syncEvtTopic = iface.getEventTopic("Sync");
+    const swapEvtTopic = iface.getEventTopic("Swap");
+    // the first element of topic array of log represents the hash of event topic
+    const poolEventLogs = logs.filter(log => log.topics[0] == syncEvtTopic || log.topics[0] == swapEvtTopic);
+    for (let log of poolEventLogs) {
+        const checksumPoolAddress = ethers.utils.getAddress(log.address);
+        if (syncEvtTopic == log.topics[0]) {
+            const v2Evt = iface.decodeEventLog("Sync", log.data, log.topics);
+            touchablePoolsV2.push({
+                address: checksumPoolAddress,
+                reserve0: BigInt(v2Evt.reserve0.toString()),
+                reserve1: BigInt(v2Evt.reserve1.toString()),
+                liquidity: sqrtBigInt(BigInt(v2Evt.reserve0.toString()) * BigInt(v2Evt.reserve1.toString()))
+            });
+            touchablePoolAddresses.push(checksumPoolAddress);
+        } else if (swapEvtTopic == log.topics[0]) {
+            const v3Evt = iface.decodeEventLog("Swap", log.data, log.topics);
+            touchablePoolsV3.push({
+                address: checksumPoolAddress,
+                sqrtPriceX96: BigInt(v3Evt.sqrtPriceX96.toString()),
+                liquidity: BigInt(v3Evt.liquidity.toString())
+            })
+            touchablePoolAddresses.push(checksumPoolAddress);
+        }
+    }
+
+    return { touchablePoolAddresses, touchablePoolsV2, touchablePoolsV3 };
+}
+
 
 module.exports = {
     calculateNextBlockBaseFee,
@@ -216,4 +274,6 @@ module.exports = {
     sqrtBigInt,
     clipBigInt,
     displayStats,
+    extractLogsFromSimulation,
+    getPoolsFromLogs
 };
