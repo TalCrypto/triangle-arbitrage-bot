@@ -22,11 +22,9 @@ const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { findUpdatedPools, clipBigInt, displayStats, extractLogsFromSimulation, getPoolsFromLogs } = require('./utils');
-const { exactTokensOut, computeProfit, optimizeAmountIn } = require('./simulator');
+const { exactTokensOut, computeProfit, optimizeAmountIn, simulatePendingTransactions } = require('./simulator');
 const { buildTx, buildBlankTx, buildLegacyTx } = require('./bundler');
 const fs = require('fs');
-const path = require('path');
-
 
 async function main() {
     logger.info("Program started");
@@ -240,7 +238,7 @@ async function main() {
 
     const multiCallInterface = new ethers.utils.Interface(MULTICALL_ABI);
 
-    let pendingSwapTxData = []
+    let pendingSwapTxArray = []
 
     wsProvider.on('pending', async (pendingTx) => {
         let sblock = new Date();
@@ -291,24 +289,24 @@ async function main() {
 
             if (touchablePoolAddresses.length > 0) {
                 logger.info(`===== Found an opportunity transaction ${pendingTx} : ${touchablePoolAddresses.length} touchable pools =====`);
-                pendingSwapTxData.push(txnData);
+                pendingSwapTxArray.push(txnData);
             } else return;
 
             // if there are over 1 swap pendings, then simulate them with multicall smart contract
-            if (pendingSwapTxData.length > 1) {
+            if (pendingSwapTxArray.length > 1) {
 
                 // filter transactions that are not mined yet
-                const tempWithFilter = await Promise.all(pendingSwapTxData.map(async (txData) => {
+                const tempWithFilter = await Promise.all(pendingSwapTxArray.map(async (txData) => {
                     const receipt = await wsProvider.getTransactionReceipt(txData['hash']);
                     return {
                         value: txData,
                         filter: receipt === null ?? false
                     };
                 }));
-                pendingSwapTxData = tempWithFilter.filter(e => e.filter).map(e => e.value);
+                pendingSwapTxArray = tempWithFilter.filter(e => e.filter).map(e => e.value);
 
                 // sort pending transactions by the gas price
-                pendingSwapTxData.sort((a, b) => {
+                pendingSwapTxArray.sort((a, b) => {
                     if (b['gasPrice'].gt(a['gasPrice'])) {
                         return 1;
                     } else {
@@ -316,29 +314,8 @@ async function main() {
                     }
                 });
 
-                // simulate multi pending tx with the multicall smart contract
-                const calls = pendingSwapTxData.map(txData => ({
-                    target: txData['to'],
-                    allowFailure: true,
-                    callData: txData['data']
-                }));
-                const multiResp = await wsProvider.send(
-                    "debug_traceCall",
-                    [
-                        {
-                            to: MULTICALL_ADDRESS,
-                            data: multiCallInterface.encodeFunctionData("aggregate3", [calls]),
-                        },
-                        "latest",
-                        {
-                            tracer: "callTracer",
-                            tracerConfig: { withLog: true }
-                        }
-                    ]
-                );
-
-                // extract logs from the multi call simulation
-                logs = extractLogsFromSimulation(multiResp);
+                // simulate multi pending tx with ethereumjs/vm hardfork
+                logs = await simulatePendingTransactions(pendingSwapTxArray, 'http://127.0.0.1:8545', await wsProvider.getBlockNumber());
 
                 // get pool infos from the log
                 const poolInfoWithMulti = getPoolsFromLogs(logs);
@@ -443,7 +420,7 @@ async function main() {
             const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
             lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS)
-            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, txnData['gasPrice'].mul(8).div(10));
+            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, pendingSwapTxArray[pendingSwapTxArray.length - 1]['gasPrice'].mul(8).div(10));
             const blockNumber = await wsProvider.getBlockNumber();
 
             // Make sure the pending transaction hasn't been mined
