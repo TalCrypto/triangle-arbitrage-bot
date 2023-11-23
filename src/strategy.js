@@ -236,7 +236,7 @@ async function main() {
 
 
 
-    const multiCallInterface = new ethers.utils.Interface(MULTICALL_ABI);
+    let lastTxBlockNumber = 0;
 
     let pendingSwapTxArray = []
 
@@ -324,7 +324,7 @@ async function main() {
                 touchablePoolsV3 = poolInfoWithMulti.touchablePoolsV3;
             }
 
-            // skip if the pools are not syned
+            // skip if the pools are not synced
             if (!hasRefreshed) return;
 
             // Find paths that use the touchable pools
@@ -419,13 +419,21 @@ async function main() {
             const account = signer.connect(wsProvider);
             const tradeContract = new ethers.Contract(TRADE_CONTRACT_ADDRESS, TRADE_CONTRACT_ABI, account);
 
-            lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS)
-            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, pendingSwapTxArray[pendingSwapTxArray.length - 1]['gasPrice'].mul(8).div(10));
+            lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS);
+
+            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, pendingSwapTxArray[pendingSwapTxArray.length - 1]['gasPrice'].mul(99).div(100));
             const blockNumber = await wsProvider.getBlockNumber();
 
             // Make sure the pending transaction hasn't been mined
             if (txRecp !== null) {
                 return;
+            }
+
+            // ignore arbi within the same block as before
+            if (blockNumber == lastTxBlockNumber) {
+                return;
+            } else {
+                lastTxBlockNumber = blockNumber;
             }
 
             // Send arbitrage transaction
