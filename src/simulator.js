@@ -260,6 +260,7 @@ async function simulatePendingTransactions(
   blockNumber
 ) {
   const common = Common.custom(CustomChain.PolygonMainnet);
+  common.setHardforkBy({ blockNumber })
   const stateManager = new EthersStateManager({
     provider: httpRpcUrl,
     blockTag: blockNumber,
@@ -278,8 +279,12 @@ async function simulatePendingTransactions(
       { common }
     )
   );
-  const txPromise = typedTxArray.map((tx) => vm.runTx({ tx, skipNonce: true }));
-  const txResultArray = await Promise.all(txPromise);
+  const txResultArray = [];
+  for (let tx of typedTxArray) {
+    const txResult = await vm.runTx({ tx, skipNonce: true });
+    txResultArray.push(txResult);
+  }
+
   let logs = [];
   for (let txResult of txResultArray) {
     if (txResult.receipt.logs.length > 0) {
