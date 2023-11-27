@@ -21,7 +21,7 @@ const { keepPoolsWithLiquidity, extractPoolsFromPaths, indexPathsByPools, preSel
 const { generatePaths } = require('./paths');
 const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
-const { findUpdatedPools, clipBigInt, displayStats, extractLogsFromSimulation, getPoolsFromLogs } = require('./utils');
+const { findUpdatedPools, clipBigInt, displayStats, extractLogsFromSimulation, getPoolsFromLogs, isSamePendingArrays } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn, simulatePendingTransactions } = require('./simulator');
 const { buildTx, buildBlankTx, buildLegacyTx } = require('./bundler');
 const fs = require('fs');
@@ -143,6 +143,8 @@ async function main() {
         profitStore[token] = 0n;
     }
 
+    let pendingTxArray = [];
+
     // Start listening to new blocks using websockets
     wsProvider.on('block', async (blockNumber) => {
         // Start of block timer
@@ -173,28 +175,22 @@ async function main() {
             dataStore.events.push(e - s);
             logger.info(`${(e - s) / 1000} s - Found ${touchedPools.length} touched pools by reading block events. Block #${blockNumber}`);
 
-            // Find paths that use the touched pools
-            const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
-            let touchedPaths = [];
-            for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
-                if (pool in pathsByPool) {
-                    // Find the new paths, check if they are not already in touchedPaths
-                    let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION / touchedPools.length, 0.5);
+            // // Find paths that use the touched pools
+            // const MAX_PATH_EVALUATION = 500; // Share that value between each touched pool
+            // let touchedPaths = [];
+            // for (let pool of touchedPools) { // Remember, touchedPools is a list of addresses
+            //     if (pool in pathsByPool) {
+            //         // Find the new paths, check if they are not already in touchedPaths
+            //         let newPaths = preSelectPaths(pathsByPool[pool], MAX_PATH_EVALUATION / touchedPools.length, 0.5);
 
-                    // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
-                    newPaths = newPaths.filter(path => !touchedPaths.includes(path));
-                    touchedPaths = touchedPaths.concat(newPaths);
+            //         // Check if the new touched paths are not already in touchedPaths, and concat the new ones.
+            //         newPaths = newPaths.filter(path => !touchedPaths.includes(path));
+            //         touchedPaths = touchedPaths.concat(newPaths);
 
-                }
-            }
+            //     }
+            // }
 
-            logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
-
-            // Check if we are still working on the latest block
-            if (blockNumber < lastBlockNumber) {
-                logger.info(`New block mined (${lastBlockNumber}), skipping block #${blockNumber}`);
-                return;
-            }
+            // logger.info(`Found ${touchedPaths.length} touched paths. Block #${blockNumber}`);
 
             // If there still are pools to refresh, process them. 
             const N_REFRESH = 200;
@@ -234,12 +230,6 @@ async function main() {
         }
     });
 
-
-
-    let lastTxBlockNumber = 0;
-
-    let pendingSwapTxArray = []
-
     wsProvider.on('pending', async (pendingTx) => {
         let sblock = new Date();
         const txnData = await wsProvider.getTransaction(pendingTx);
@@ -247,13 +237,6 @@ async function main() {
         // the local node can't get the tranaction data if it has been announced
         // so we skip in this case
         if (!txnData) return;
-
-        const txRecp = await wsProvider.getTransactionReceipt(pendingTx);
-
-        // Make sure the pending transaction hasn't been mined
-        if (txRecp !== null) {
-            return;
-        }
 
         try {
             // simulate the pending transaction
@@ -274,7 +257,7 @@ async function main() {
                 ]
             );
 
-            let logs = extractLogsFromSimulation(response)
+            let logs = extractLogsFromSimulation(response);
 
             if (logs.length == 0) return;
 
@@ -282,50 +265,67 @@ async function main() {
             let touchablePoolsV2 = [];
             let touchablePoolsV3 = [];
 
-            const poolInfo = getPoolsFromLogs(logs);
+            const poolInfo = getPoolsFromLogs(logs, pools);
             touchablePoolAddresses = poolInfo.touchablePoolAddresses;
             touchablePoolsV2 = poolInfo.touchablePoolsV2;
             touchablePoolsV3 = poolInfo.touchablePoolsV3;
 
-            if (touchablePoolAddresses.length > 0) {
-                logger.info(`===== Found an opportunity transaction ${pendingTx} : ${touchablePoolAddresses.length} touchable pools =====`);
-                pendingSwapTxArray.push(txnData);
-            } else return;
+            if (touchablePoolAddresses.length == 0) return;
+
+            logger.info(`===== Found an opportunity transaction ${pendingTx} : ${touchablePoolAddresses.length} touchable pools =====`);
+
+            const blockNumber = await wsProvider.getBlockNumber();
+
+            // if touching pools, then cache it in order to simulate
+            pendingTxArray.push({ blockNumber, txnData });
+
+            // filter transactions that are not mined yet
+            const tempWithFilter = await Promise.all(pendingTxArray.map(async (e) => {
+                const receipt = await wsProvider.getTransactionReceipt(e.txnData['hash']);
+                return {
+                    value: e,
+                    filter: (receipt === null ?? false) && blockNumber - e.blockNumber < 30
+                };
+            }));
+            pendingTxArray = tempWithFilter.filter(e => e.filter).map(e => e.value);
+
+            logger.info(`Number of pending transactions: ${pendingTxArray.length}`);
+
+            // sort pending transactions by the gas price, if gas price same, then prioritize legacy tx
+            pendingTxArray.sort((a, b) => {
+                if (b.txnData['gasPrice'].gt(a.txnData['gasPrice'])) {
+                    return 1;
+                } else {
+                    return 0
+                }
+            }).sort((a, b) => {
+                if (b.txnData['gasPrice'].eq(a.txnData['gasPrice']) && b.txnData['type'] == 0 && a.txnData['type'] == 2) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            });
+
+            // skip if the pools are not synced
+            if (!hasRefreshed) return;
+
+            // cache pending array to check stale later
+            const cachePendingArray = pendingTxArray.slice();
 
             // if there are over 1 swap pendings, then simulate them with multicall smart contract
-            if (pendingSwapTxArray.length > 1) {
-
-                // filter transactions that are not mined yet
-                const tempWithFilter = await Promise.all(pendingSwapTxArray.map(async (txData) => {
-                    const receipt = await wsProvider.getTransactionReceipt(txData['hash']);
-                    return {
-                        value: txData,
-                        filter: receipt === null ?? false
-                    };
-                }));
-                pendingSwapTxArray = tempWithFilter.filter(e => e.filter).map(e => e.value);
-
-                // sort pending transactions by the gas price
-                pendingSwapTxArray.sort((a, b) => {
-                    if (b['gasPrice'].gt(a['gasPrice'])) {
-                        return 1;
-                    } else {
-                        return 0
-                    }
-                });
+            if (cachePendingArray.length > 1) {
+                const t0 = new Date();
 
                 // simulate multi pending tx with ethereumjs/vm hardfork
-                logs = await simulatePendingTransactions(pendingSwapTxArray, 'http://127.0.0.1:8545', await wsProvider.getBlockNumber());
+                logs = await simulatePendingTransactions(cachePendingArray.map(e => e.txnData), 'http://127.0.0.1:8545', blockNumber);
+                logger.info(`Time to simulate: ${(new Date() - t0) / 1000}s`)
 
                 // get pool infos from the log
-                const poolInfoWithMulti = getPoolsFromLogs(logs);
+                const poolInfoWithMulti = getPoolsFromLogs(logs, pools);
                 touchablePoolAddresses = poolInfoWithMulti.touchablePoolAddresses;
                 touchablePoolsV2 = poolInfoWithMulti.touchablePoolsV2;
                 touchablePoolsV3 = poolInfoWithMulti.touchablePoolsV3;
             }
-
-            // skip if the pools are not synced
-            if (!hasRefreshed) return;
 
             // Find paths that use the touchable pools
             const MAX_PATH_EVALUATION = 500; // Share that value between each touchable pool
@@ -421,23 +421,16 @@ async function main() {
 
             lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS);
 
-            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, pendingSwapTxArray[pendingSwapTxArray.length - 1]['gasPrice'].mul(99).div(100));
-            const blockNumber = await wsProvider.getBlockNumber();
+            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, pendingTxArray[pendingTxArray.length - 1]['txnData']['gasPrice'].mul(99).div(100));
 
-            // Make sure the pending transaction hasn't been mined
-            if (txRecp !== null) {
+            // compare current pending to the global pending in order to check stale
+            if (!isSamePendingArrays(cachePendingArray, pendingTxArray)) {
+                logger.info(`Pending transaction array has been updated, skipping tx ${pendingTx}`);
                 return;
-            }
-
-            // ignore arbi within the same block as before
-            if (blockNumber == lastTxBlockNumber) {
-                return;
-            } else {
-                lastTxBlockNumber = blockNumber;
             }
 
             // Send arbitrage transaction
-            logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${blockNumber + 2} `);
+            logger.info(`!!!!!!!!!!!!! Sending arbitrage transaction... Should land in block #${await wsProvider.getBlockNumber() + 2} `);
 
             // Send the transaction
             const tx = await wsProvider.send("eth_sendRawTransaction", txObject);
