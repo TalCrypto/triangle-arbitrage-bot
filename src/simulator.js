@@ -264,7 +264,6 @@ async function simulatePendingTransactions(
   if (pendingTxArray.length == 0) return logs;
 
   const common = Common.custom(CustomChain.PolygonMainnet);
-  common.setHardforkBy({ blockNumber })
   const stateManager = new EthersStateManager({
     provider: httpRpcUrl,
     blockTag: blockNumber,

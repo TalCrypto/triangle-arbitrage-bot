@@ -23,7 +23,7 @@ const { batchReserves } = require('./multi');
 const { streamNewBlocks } = require('./streams');
 const { findUpdatedPools, clipBigInt, displayStats, extractLogsFromSimulation, getPoolsFromLogs, isSamePendingArrays } = require('./utils');
 const { exactTokensOut, computeProfit, optimizeAmountIn, simulatePendingTransactions } = require('./simulator');
-const { buildTx, buildBlankTx, buildLegacyTx } = require('./bundler');
+const { buildBackRunTx } = require('./bundler');
 const fs = require('fs');
 
 async function main() {
@@ -421,7 +421,7 @@ async function main() {
 
             lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS);
 
-            let txObject = await buildLegacyTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, pendingTxArray[pendingTxArray.length - 1]['txnData']['gasPrice'].mul(99).div(100));
+            let txObject = await buildBackRunTx(path, tradeContract, approvedTokens, logger, signer, lastTxCount, pendingTxArray[pendingTxArray.length - 1]['txnData']);
 
             // compare current pending to the global pending in order to check stale
             if (!isSamePendingArrays(cachePendingArray, pendingTxArray)) {
