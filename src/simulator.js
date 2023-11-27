@@ -285,6 +285,8 @@ async function simulatePendingTransactions(
   const txResultArray = [];
   for (let tx of typedTxArray) {
     const txResult = await vm.runTx({ tx, skipNonce: true, skipBalance: true });
+    await vm.stateManager.checkpoint();
+    await vm.stateManager.commit();
     txResultArray.push(txResult);
   }
 
