@@ -579,7 +579,7 @@ async function main() {
       // if touching pools, then cache it in order to simulate
       pendingTxArray.push({ blockNumber, txnData });
 
-      fs.writeFileSync("data/pendings.json", `${pendingTx}, `, { flag: "a" });
+      //   fs.writeFileSync("data/pendings.json", `${pendingTx}, `, { flag: "a" });
 
       // sort pending transactions by the gas price, if gas price same, then prioritize legacy tx
       pendingTxArray
