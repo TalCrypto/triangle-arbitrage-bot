@@ -6,7 +6,7 @@ const { TransactionFactory } = require("@ethereumjs/tx");
 const { VM } = require("@ethereumjs/vm");
 
 class UniswapV2Simulator {
-  constructor() { }
+  constructor() {}
 
   reservesToPrice(reserve0, reserve1, decimals0, decimals1, token0In) {
     reserve0 = Number(reserve0);
@@ -208,7 +208,7 @@ function computeProfit(amountIn, path) {
 // Find the optimal input amount for an arbitrage path.
 function optimizeAmountIn(path) {
   // To find the local maximum, we calculate the derivative of the profit function at the middle point of the interval. Assume the profit function is convex.
-  let min = BigInt(0);
+  let min = BigInt(1);
   let max = BigInt(10 ** 30);
 
   while (computeProfit(max, path) < 0) {
@@ -259,11 +259,11 @@ async function simulatePendingTransactions(
   httpRpcUrl,
   blockNumber
 ) {
-
   let logs = [];
   if (pendingTxArray.length == 0) return logs;
 
   const common = Common.custom(CustomChain.PolygonMainnet);
+  common.setHardforkBy({ blockNumber: blockNumber + 1 });
   const stateManager = new EthersStateManager({
     provider: httpRpcUrl,
     blockTag: blockNumber,
