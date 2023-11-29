@@ -8,7 +8,7 @@ function streamNewBlocks(wssUrl, eventEmitter) {
     wss.on('block', async (blockNumber) => {
         let block = await wss.getBlock(blockNumber);
         // let nextBaseFee = calculateNextBlockBaseFee(block);
-        // let estimateGas = await estimateNextBlockGas(); 
+        // let estimateGas = await estimateNextBlockGas();
 
         eventEmitter.emit('event', {
             type: 'block',
@@ -20,7 +20,7 @@ function streamNewBlocks(wssUrl, eventEmitter) {
 
 function streamPendingTransactions(wssUrl, eventEmitter) {
     const wss = new ethers.providers.WebSocketProvider(wssUrl);
-    
+
     wss.on('pending', async (txHash) => {
         eventEmitter.emit('event', {
             type: 'pendingTx',
@@ -35,7 +35,7 @@ function streamUniswapV2Events(wssUrl, eventEmitter) {
     const wss = new ethers.providers.WebSocketProvider(wssUrl);
 
     const syncEventSelector = ethers.utils.id('Sync(uint112,uint112)');
-    const filter = {topics: [syncEventSelector]};
+    const filter = { topics: [syncEventSelector] };
 
     wss.on(filter, async (event) => {
         eventEmitter.emit('event', event);

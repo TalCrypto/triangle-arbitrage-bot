@@ -6,17 +6,17 @@ const range = (start, stop, step) => {
     let loopCnt = Math.ceil((stop - start) / step);
     let rangeArray = [];
     for (let i = 0; i < loopCnt; i++) {
-        let num = start + (i * step);
+        let num = start + i * step;
         rangeArray.push(num);
     }
     return rangeArray;
-}
+};
 
 class ArbPath {
     constructor(
         root, // root token, token from which the arbitrage path starts
         pools, // pool1, pool2, pool3; The pools involved in the arbitrage path
-        directions, // zeroForOne1, zeroForOne2, ...; Indicates the direction of each swap. zfo = true means token0 -> token1.
+        directions // zeroForOne1, zeroForOne2, ...; Indicates the direction of each swap. zfo = true means token0 -> token1.
     ) {
         this.root = root;
         this.pools = pools;
@@ -37,7 +37,10 @@ class ArbPath {
     shouldBlacklist(blacklistTokens) {
         for (let i = 0; i < this.nhop(); i++) {
             let pool = this[`pool${i + 1}`];
-            if ((pool.token0 in blacklistTokens) || (pool.token1 in blacklistTokens)) {
+            if (
+                pool.token0 in blacklistTokens ||
+                pool.token1 in blacklistTokens
+            ) {
                 return true;
             }
             return false;
@@ -45,7 +48,9 @@ class ArbPath {
     }
 
     simulateV2Path(amountIn, reserves) {
-        let tokenInDecimals = this.zeroForOne1 ? this.pool1.decimals0 : this.pool1.decimals1;
+        let tokenInDecimals = this.zeroForOne1
+            ? this.pool1.decimals0
+            : this.pool1.decimals1;
         let amountOut = amountIn * 10 ** tokenInDecimals;
 
         let sim = new UniswapV2Simulator();
@@ -64,12 +69,14 @@ class ArbPath {
     }
 
     optimizeAmountIn(maxAmountIn, stepSize, reserves) {
-        let tokenInDecimals = this.zeroForOne1 ? this.pool1.decimals0 : this.pool1.decimals1;
+        let tokenInDecimals = this.zeroForOne1
+            ? this.pool1.decimals0
+            : this.pool1.decimals1;
         let optimizedIn = 0;
         let profit = 0;
         for (let amountIn of range(0, maxAmountIn, stepSize)) {
             let amountOut = this.simulateV2Path(amountIn, reserves);
-            let thisProfit = amountOut - (amountIn * (10 ** tokenInDecimals));
+            let thisProfit = amountOut - amountIn * 10 ** tokenInDecimals;
             if (thisProfit >= profit) {
                 optimizedIn = amountIn;
                 profit = thisProfit;
@@ -77,10 +84,9 @@ class ArbPath {
                 break;
             }
         }
-        return [optimizedIn, profit / (10 ** tokenInDecimals)];
+        return [optimizedIn, profit / 10 ** tokenInDecimals];
     }
 }
-
 
 function generateTriangularPaths(pools, tokenIn) {
     /*
@@ -95,47 +101,59 @@ function generateTriangularPaths(pools, tokenIn) {
 
     pools = Object.values(pools);
 
-    const progress = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+    const progress = new cliProgress.SingleBar(
+        {},
+        cliProgress.Presets.shades_classic
+    );
     progress.start(pools.length);
 
     for (let i = 0; i < pools.length; i++) {
         let pool1 = pools[i];
-        let canTrade1 = (pool1.token0 == tokenIn) || (pool1.token1 == tokenIn);
+        let canTrade1 = pool1.token0 == tokenIn || pool1.token1 == tokenIn;
         if (canTrade1) {
             let zeroForOne1 = pool1.token0 == tokenIn;
             let tokenOut1 = zeroForOne1 ? pool1.token1 : pool1.token0;
 
             for (let j = 0; j < pools.length; j++) {
                 let pool2 = pools[j];
-                let canTrade2 = (pool2.token0 == tokenOut1) || (pool2.token1 == tokenOut1);
+                let canTrade2 =
+                    pool2.token0 == tokenOut1 || pool2.token1 == tokenOut1;
                 if (canTrade2) {
                     let zeroForOne2 = pool2.token0 == tokenOut1;
                     let tokenOut2 = zeroForOne2 ? pool2.token1 : pool2.token0;
 
                     for (let k = 0; k < pools.length; k++) {
                         let pool3 = pools[k];
-                        let canTrade3 = (pool3.token0 == tokenOut2) || (pool3.token1 == tokenOut2);
+                        let canTrade3 =
+                            pool3.token0 == tokenOut2 ||
+                            pool3.token1 == tokenOut2;
                         if (canTrade3) {
                             let zeroForOne3 = pool3.token0 == tokenOut2;
-                            let tokenOut3 = zeroForOne3 ? pool3.token1 : pool3.token0;
+                            let tokenOut3 = zeroForOne3
+                                ? pool3.token1
+                                : pool3.token0;
 
                             if (tokenOut3 == tokenIn) {
-                                let uniquePoolCnt = [...new Set([
-                                    pool1.address,
-                                    pool2.address,
-                                    pool3.address,
-                                ])].length;
+                                let uniquePoolCnt = [
+                                    ...new Set([
+                                        pool1.address,
+                                        pool2.address,
+                                        pool3.address,
+                                    ]),
+                                ].length;
 
                                 if (uniquePoolCnt < 3) {
                                     continue;
                                 }
 
-                                let arbPath = new ArbPath(pool1,
-                                                          pool2,
-                                                          pool3,
-                                                          zeroForOne1,
-                                                          zeroForOne2,
-                                                          zeroForOne3);
+                                let arbPath = new ArbPath(
+                                    pool1,
+                                    pool2,
+                                    pool3,
+                                    zeroForOne1,
+                                    zeroForOne2,
+                                    zeroForOne3
+                                );
                                 paths.push(arbPath);
                             }
                         }
@@ -151,14 +169,13 @@ function generateTriangularPaths(pools, tokenIn) {
     return paths;
 }
 
-
 function generatePaths(rootTokens, pools, maxHops) {
     // Stores all temporary paths
     const tempPoolPaths = []; // [[pool1, pool2, ...., poolN], ...]
 
     // Store the input token for the next hop of each path
     const tempOutTokens = []; // [outTokenForPath1, outTokenForPath2, ...]
-    
+
     const finalPaths = [];
 
     // Lookup table to retrieve pools by token involved
@@ -190,9 +207,9 @@ function generatePaths(rootTokens, pools, maxHops) {
         }
 
         // Check if the potential pools are already in the path by comparing addresses
-        
-        let futurePools = potentialPools.filter(pool => {
-            return !path.some(pathPool => {
+
+        let futurePools = potentialPools.filter((pool) => {
+            return !path.some((pathPool) => {
                 return pathPool.address == pool.address;
             });
         });
@@ -216,7 +233,12 @@ function generatePaths(rootTokens, pools, maxHops) {
                 });
             } else {
                 // Otherwise, we should explore the next hop
-                generatePathsRecursive(tokenOut, futurePath, stopToken, hop + 1);
+                generatePathsRecursive(
+                    tokenOut,
+                    futurePath,
+                    stopToken,
+                    hop + 1
+                );
             }
         }
     }
@@ -225,7 +247,9 @@ function generatePaths(rootTokens, pools, maxHops) {
     let pathCount = 0;
     for (let rootToken of rootTokens) {
         generatePathsRecursive(rootToken, [], rootToken, 0);
-        logger.info(`Generated ${finalPaths.length - pathCount} paths for ${rootToken}`);
+        logger.info(
+            `Generated ${finalPaths.length - pathCount} paths for ${rootToken}`
+        );
         pathCount = finalPaths.length;
     }
 
@@ -254,9 +278,8 @@ function generatePaths(rootTokens, pools, maxHops) {
     }, ...]
     */
 
-    return finalPaths; 
+    return finalPaths;
 }
-
 
 module.exports = {
     ArbPath,

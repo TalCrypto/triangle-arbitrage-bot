@@ -1,11 +1,7 @@
 const { ethers } = require('ethers');
 const axios = require('axios');
 
-const { 
-    BLOCKNATIVE_TOKEN,
-    CHAIN_ID,
-    logger,
-} = require('./constants');
+const { BLOCKNATIVE_TOKEN, CHAIN_ID, logger } = require('./constants');
 
 const calculateNextBlockBaseFee = (block) => {
     let baseFee = BigInt(block.baseFeePerGas);
@@ -18,9 +14,13 @@ const calculateNextBlockBaseFee = (block) => {
     let newBaseFee;
 
     if (gasUsed > targetGasUsed) {
-        newBaseFee = baseFee + ((baseFee * (gasUsed - targetGasUsed)) / targetGasUsed) / BigInt(8);
+        newBaseFee =
+            baseFee +
+            (baseFee * (gasUsed - targetGasUsed)) / targetGasUsed / BigInt(8);
     } else {
-        newBaseFee = baseFee - ((baseFee * (targetGasUsed - gasUsed)) / targetGasUsed) / BigInt(8);
+        newBaseFee =
+            baseFee -
+            (baseFee * (targetGasUsed - gasUsed)) / targetGasUsed / BigInt(8);
     }
 
     const rand = BigInt(Math.floor(Math.random() * 10));
@@ -29,7 +29,8 @@ const calculateNextBlockBaseFee = (block) => {
 
 async function estimateNextBlockGas() {
     let estimate = {};
-    if (!BLOCKNATIVE_TOKEN || ![1, 137].includes(parseInt(CHAIN_ID))) return estimate;
+    if (!BLOCKNATIVE_TOKEN || ![1, 137].includes(parseInt(CHAIN_ID)))
+        return estimate;
     const url = `https://api.blocknative.com/gasprices/blockprices?chainid=${CHAIN_ID}`;
     const response = await axios.get(url, {
         headers: { Authorization: BLOCKNATIVE_TOKEN },
@@ -38,8 +39,12 @@ async function estimateNextBlockGas() {
         let gwei = 10 ** 9;
         let res = response.data;
         let estimatedPrice = res.blockPrices[0].estimatedPrices[0];
-        estimate['maxPriorityFeePerGas'] = BigInt(parseInt(estimatedPrice['maxPriorityFeePerGas'] * gwei));
-        estimate['maxFeePerGas'] = BigInt(parseInt(estimatedPrice['maxFeePerGas'] * gwei));
+        estimate['maxPriorityFeePerGas'] = BigInt(
+            parseInt(estimatedPrice['maxPriorityFeePerGas'] * gwei)
+        );
+        estimate['maxFeePerGas'] = BigInt(
+            parseInt(estimatedPrice['maxFeePerGas'] * gwei)
+        );
     }
     return estimate;
 }
@@ -48,23 +53,31 @@ async function estimateNextBlockGas() {
 async function findUpdatedPools(provider, blockNumber, pools, tokens) {
     // Interfaces for the events we are interested in.
     const interfaces = [
-        new ethers.utils.Interface(['event Sync(uint112 reserve0, uint112 reserve1)']),
-        new ethers.utils.Interface(['event Mint(address sender, address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)']),
-        new ethers.utils.Interface(['event Burn(address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)']),
-        new ethers.utils.Interface(['event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)']),
+        new ethers.utils.Interface([
+            'event Sync(uint112 reserve0, uint112 reserve1)',
+        ]),
+        new ethers.utils.Interface([
+            'event Mint(address sender, address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)',
+        ]),
+        new ethers.utils.Interface([
+            'event Burn(address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)',
+        ]),
+        new ethers.utils.Interface([
+            'event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)',
+        ]),
         // new ethers.utils.Interface(['event Flash(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)']),
         // new ethers.utils.Interface(['event Collect(address indexed sender, uint256 amount0, uint256 amount1)']),
     ];
 
     // Used to print the DEX version associated with each event.
     const interfaceVersion = {
-        "Sync": "V2",
-        "Mint": "V3",
-        "Burn": "V3",
-        "Swap": "V3",
+        Sync: 'V2',
+        Mint: 'V3',
+        Burn: 'V3',
+        Swap: 'V3',
         // "Flash": "V3",
         // "Collect": "V3",
-    }
+    };
 
     const logPromises = [];
     const parsedResults = [];
@@ -74,22 +87,27 @@ async function findUpdatedPools(provider, blockNumber, pools, tokens) {
         let prom = provider.getLogs({
             fromBlock: blockNumber,
             toBlock: blockNumber,
-            topics: [
-                iface.getEventTopic(Object.values(iface.events)[0]),
-            ],
+            topics: [iface.getEventTopic(Object.values(iface.events)[0])],
         });
 
         // After the promise returns, parse the data.
         prom.then((logs) => {
-            logger.info(`Found ${logs.length} logs for ${Object.values(iface.events)[0].name} (${interfaceVersion[Object.values(iface.events)[0].name]}) in block ${blockNumber}`);
+            logger.info(
+                `Found ${logs.length} logs for ${
+                    Object.values(iface.events)[0].name
+                } (${
+                    interfaceVersion[Object.values(iface.events)[0].name]
+                }) in block ${blockNumber}`
+            );
             for (const log of logs) {
-
                 // Sometimes we match events that are not from the pools we are interested in. This raises an error.
                 let parsedData = {};
                 try {
                     parsedData = iface.parseLog(log);
                 } catch (err) {
-                    logger.error(`Error parsing log ${log.transactionHash} in block ${blockNumber}: ${err}`);
+                    logger.error(
+                        `Error parsing log ${log.transactionHash} in block ${blockNumber}: ${err}`
+                    );
                     continue;
                 }
 
@@ -122,18 +140,22 @@ async function findUpdatedPools(provider, blockNumber, pools, tokens) {
             const symbol0 = tokens[poolData.token0].symbol;
             const symbol1 = tokens[poolData.token1].symbol;
             poolAddresses.push(resLog.log.address);
-            
-            let strData = "";
+
+            let strData = '';
             const logs = resLog.parsed.args;
             // Logs is array-like with some named members. Print only the named members. (both key and value).
             for (const [key, value] of Object.entries(logs)) {
-                if (isNaN(key)){
+                if (isNaN(key)) {
                     strData += `${key}: ${value} `;
                 }
             }
-            logger.info(`Found event ${eventName} (${interfaceVersion[eventName]}) in block ${blockNumber} Pool address: ${resLog.log.address} Tokens: ${symbol0}/${symbol1} Data: ${strData}`);
+            logger.info(
+                `Found event ${eventName} (${interfaceVersion[eventName]}) in block ${blockNumber} Pool address: ${resLog.log.address} Tokens: ${symbol0}/${symbol1} Data: ${strData}`
+            );
         } else {
-            logger.info(`Found event ${eventName} (${interfaceVersion[eventName]}) in block ${blockNumber} Pool address: ${resLog.log.address} Unknown pool.`);
+            logger.info(
+                `Found event ${eventName} (${interfaceVersion[eventName]}) in block ${blockNumber} Pool address: ${resLog.log.address} Unknown pool.`
+            );
         }
     }
 
@@ -151,8 +173,8 @@ function sqrtBigInt(n) {
     }
 
     function newtonIteration(n, x0) {
-        const x1 = ((n / x0) + x0) >> 1n;
-        if (x0 === x1 || x0 === (x1 - 1n)) {
+        const x1 = (n / x0 + x0) >> 1n;
+        if (x0 === x1 || x0 === x1 - 1n) {
             return x0;
         }
         return newtonIteration(n, x1);
@@ -177,17 +199,25 @@ function clipBigInt(num, precision) {
 }
 
 // Display bot stats
-function displayStats(sessionStart, logger, tokens, dataStore, profitStore){
-    logger.info("===== Profit Recap =====")
+function displayStats(sessionStart, logger, tokens, dataStore, profitStore) {
+    logger.info('===== Profit Recap =====');
     let sessionDuration = (new Date() - sessionStart) / 1000;
-    logger.info(`Session duration: ${sessionDuration} seconds (${sessionDuration / 60} minutes) (${sessionDuration / 60 / 60} hours)`);
-    
+    logger.info(
+        `Session duration: ${sessionDuration} seconds (${
+            sessionDuration / 60
+        } minutes) (${sessionDuration / 60 / 60} hours)`
+    );
+
     // For each token, display the profit in decimals
     for (let token in profitStore) {
-        let profit = Number(profitStore[token]) / 10**tokens[token].decimals;
-        logger.info(`${tokens[token].symbol}: ${profit} $${profit*tokens[token].usd} (${token})`);
+        let profit = Number(profitStore[token]) / 10 ** tokens[token].decimals;
+        logger.info(
+            `${tokens[token].symbol}: ${profit} $${
+                profit * tokens[token].usd
+            } (${token})`
+        );
     }
-    logger.info("========================")
+    logger.info('========================');
 
     // DEBUG
     // Print time decile values: events, reserves, block
@@ -198,17 +228,22 @@ function displayStats(sessionStart, logger, tokens, dataStore, profitStore){
     let reserveDeciles = [];
     let blockDeciles = [];
     for (let i = 0; i < 10; i++) {
-        eventDeciles.push(dataStore.events[Math.floor(i * dataStore.events.length / 10)]);
-        reserveDeciles.push(dataStore.reserves[Math.floor(i * dataStore.reserves.length / 10)]);
-        blockDeciles.push(dataStore.block[Math.floor(i * dataStore.block.length / 10)]);
+        eventDeciles.push(
+            dataStore.events[Math.floor((i * dataStore.events.length) / 10)]
+        );
+        reserveDeciles.push(
+            dataStore.reserves[Math.floor((i * dataStore.reserves.length) / 10)]
+        );
+        blockDeciles.push(
+            dataStore.block[Math.floor((i * dataStore.block.length) / 10)]
+        );
     }
-    logger.info("///// Time Stats /////")
+    logger.info('///// Time Stats /////');
     logger.info(`Event deciles: ${eventDeciles}`);
     logger.info(`Reserve deciles: ${reserveDeciles}`);
     logger.info(`Block deciles: ${blockDeciles}`);
-    logger.info("//////////////////////")
+    logger.info('//////////////////////');
 }
-
 
 module.exports = {
     calculateNextBlockBaseFee,

@@ -4,8 +4,8 @@ const { profileBlockArrivals } = require('./src/profiler');
 // Check if flag build is set
 const args = process.argv.slice(2);
 const buildFlag = args[0];
-if (buildFlag == "-build" || buildFlag == "-b") {
-    console.log("Building zip file...");
+if (buildFlag == '-build' || buildFlag == '-b') {
+    console.log('Building zip file...');
     // Create a new zip file containing the following content:
     // - abi/*
     // - data/*.json (ignore .log files)
@@ -21,13 +21,15 @@ if (buildFlag == "-build" || buildFlag == "-b") {
     const output = fs.createWriteStream('build.zip');
     const archive = archiver('zip', {
         // Set max compression level
-        zlib: { level: 9 }
+        zlib: { level: 9 },
     });
     output.on('close', () => {
-        console.log(`Build complete. Build size: ${archive.pointer()} total bytes`);
+        console.log(
+            `Build complete. Build size: ${archive.pointer()} total bytes`
+        );
     });
     archive.on('error', (err) => {
-        console.log("Error building zip file. Error: ", err);
+        console.log('Error building zip file. Error: ', err);
         throw err;
     });
     archive.pipe(output);
@@ -42,50 +44,49 @@ if (buildFlag == "-build" || buildFlag == "-b") {
     // Add data files to the zip
     const dataFiles = fs.readdirSync('data');
     for (const dataFile of dataFiles) {
-        if (dataFile.endsWith(".json")) {
+        if (dataFile.endsWith('.json')) {
             archive.file(`data/${dataFile}`, { name: `data/${dataFile}` });
         }
     }
-    
+
     archive.finalize();
     return;
-
-} else if (buildFlag == "-profileblocks" || buildFlag == "-pb") {
+} else if (buildFlag == '-profileblocks' || buildFlag == '-pb') {
     let probeDuration = args[1];
     if (!probeDuration) {
-        console.log("Please specify a duration in minutes.");
+        console.log('Please specify a duration in minutes.');
         return;
     }
     console.log(`Profiling block arrivals for ${probeDuration} minutes...`);
     // Profile block arrivals
     profileBlockArrivals(probeDuration * 60 * 1000);
-
 } else if (!buildFlag) {
     // Run the bot. First, check if the .env file exists
     const dotenv = require('dotenv');
     const fs = require('fs');
     if (!fs.existsSync('.env')) {
-        console.log("No .env file found. Please create one.");
+        console.log('No .env file found. Please create one.');
         return;
     }
-    
+
     // Check wether all the modules are installed
     // const { exec } = require('child_process');
     // exec('npm install', (err, stdout, stderr) => {
     //     if (err) {
     //         console.log("Error installing modules. Error: ", err);
     //         return;
-    
+
     //     }
     //     console.log("Modules installed. Starting bot...");
     // });
-    
+
     (async () => {
         // Start the bot by running the "main" function of strategy.js
         await main();
     })();
 } else {
-    console.log("Invalid flag. Valid flags are: -build, -b, -profileblocks, -pb");
+    console.log(
+        'Invalid flag. Valid flags are: -build, -b, -profileblocks, -pb'
+    );
     return;
 }
-

@@ -1,43 +1,52 @@
 {
-  "name": "mev-arb-bot",
-  "version": "1.0.0",
-  "description": "MEV bot script written in Node.js",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ondecentral/mev-arb-bot.git"
-  },
-  "keywords": [
-    "cyclic",
-    "triangular",
-    "cross",
-    "crypto",
-    "dex",
-    "flash",
-    "swap",
-    "flash",
-    "loan",
-    "mempool",
-    "mev"
-  ],
-  "author": "Kentaro",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/ondecentral/mev-arb-bot/issues"
-  },
-  "homepage": "https://github.com/ondecentral/mev-arb-bot#readme",
-  "dependencies": {
-    "@flashbots/ethers-provider-bundle": "^0.6.2",
-    "archiver": "^6.0.1",
-    "axios": "^1.4.0",
-    "cli-progress": "^3.12.0",
-    "dotenv": "^16.3.1",
-    "ethers": "^5.7.2",
-    "fs": "^0.0.1-security",
-    "uuid": "^9.0.0",
-    "winston": "^3.10.0"
-  }
+    "name": "mev-arb-bot",
+    "version": "1.0.0",
+    "description": "MEV bot script written in Node.js",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "format:check": "prettier --check .",
+        "format:write": "prettier --write .",
+        "lint:check": "eslint .",
+        "lint:fix": "eslint --fix ."
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/ondecentral/mev-arb-bot.git"
+    },
+    "keywords": [
+        "cyclic",
+        "triangular",
+        "cross",
+        "crypto",
+        "dex",
+        "flash",
+        "swap",
+        "flash",
+        "loan",
+        "mempool",
+        "mev"
+    ],
+    "author": "Kentaro",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/ondecentral/mev-arb-bot/issues"
+    },
+    "homepage": "https://github.com/ondecentral/mev-arb-bot#readme",
+    "dependencies": {
+        "@flashbots/ethers-provider-bundle": "^0.6.2",
+        "archiver": "^6.0.1",
+        "axios": "^1.4.0",
+        "cli-progress": "^3.12.0",
+        "dotenv": "^16.3.1",
+        "ethers": "^5.7.2",
+        "fs": "^0.0.1-security",
+        "uuid": "^9.0.0",
+        "winston": "^3.10.0"
+    },
+    "devDependencies": {
+        "eslint": "^8.54.0",
+        "eslint-config-prettier": "^9.0.0",
+        "prettier": "^3.1.0"
+    }
 }
