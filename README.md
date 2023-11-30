@@ -53,8 +53,6 @@ cd contracts/forge
 forge script ./script/FilterTrapToken.s.sol:FilterTrapToken --rpc-url http://127.0.0.1:8545
 ```
 
-Same logic as above, modify `chunk` to be 100, then 10, then 1
-
 <hr/>
 
 Then you will deploy the TradeContract. The private key you have in your .env file that has the MATIC used to pay for gas for the trade transaction must _also_ be the `owner` defined in TradeContract.sol
