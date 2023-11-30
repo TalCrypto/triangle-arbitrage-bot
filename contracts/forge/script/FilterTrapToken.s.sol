@@ -51,6 +51,7 @@ contract FilterTrapToken is Script, StdCheats {
     }
 
     function run() external {
+        vm.pauseGasMetering();
         string memory root = vm.projectRoot();
         string memory poolPath = string.concat(root, '/external/pools.json');
         string memory tokenPath = string.concat(root, '/external/tokens.json');
