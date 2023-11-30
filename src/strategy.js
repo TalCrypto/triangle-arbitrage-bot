@@ -512,16 +512,15 @@ async function main() {
                 );
             } else {
                 let lastGasPrice = await wsProvider.getGasPrice();
-                let tipPercent = 100;
-                txObject = await buildTx(
+                // if there aren't competive transactions, build normal legacy transactions
+                txObject = await buildLegacyTx(
                     path,
                     tradeContract,
                     approvedTokens,
                     logger,
                     signer,
                     lastTxCount,
-                    lastGasPrice,
-                    tipPercent
+                    lastGasPrice
                 );
             }
 
