@@ -187,6 +187,34 @@ async function main() {
     let pendingTxArray = []; // used to store pending transactions
     let lastSubmittedBlock = 0; // used to avoid submitting in the next block because self transactions are not considered as pending ones
 
+    function cachePendingTransaction(blockNumber, txnData) {
+        // if touching pools, then cache it in order to simulate
+        pendingTxArray.push({ blockNumber, txnData });
+
+        //   fs.writeFileSync("data/pendings.json", `${pendingTx}, `, { flag: "a" });
+
+        // sort pending transactions by the gas price, if gas price same, then prioritize legacy tx
+        pendingTxArray
+            .sort((a, b) => {
+                if (b.txnData['gasPrice'].gt(a.txnData['gasPrice'])) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            })
+            .sort((a, b) => {
+                if (
+                    b.txnData['gasPrice'].eq(a.txnData['gasPrice']) &&
+                    b.txnData['type'] == 0 &&
+                    a.txnData['type'] == 2
+                ) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            });
+    }
+
     // Start listening to new blocks using websockets
     wsProvider.on('block', async (blockNumber) => {
         // Start of block timer
@@ -218,7 +246,7 @@ async function main() {
                         value: e,
                         filter:
                             (receipt === null ?? false) &&
-                            blockNumber - e.blockNumber < 3,
+                            blockNumber - e.blockNumber < 4,
                     };
                 })
             );
@@ -541,10 +569,14 @@ async function main() {
                 }`
             );
 
-            const tx = await wsProvider.send(
+            const txHash = await wsProvider.send(
                 'eth_sendRawTransaction',
                 [txObject]
             );
+
+            const txnData = await wsProvider.getTransaction(txHash);
+
+            cachePendingTransaction(blockNumber, txnData);
 
             //   logger.info(`${JSON.stringify(pendingTxArray)}`);
 
