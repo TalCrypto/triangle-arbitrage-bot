@@ -249,7 +249,7 @@ function keepPoolsWithLiquidity(pools) {
                 poolsWithLiquidity[address] = pool;
             }
         } else if (pool.version == DexVariant.UniswapV3) {
-            if (pool.extra.liquidity > 0) {
+            if (pool.extra.liquidity > 0 && pool.extra.amount0 > 0 && pool.extra.amount1 > 0) {
                 poolsWithLiquidity[address] = pool;
             }
         }

@@ -73,10 +73,14 @@ async function getUniswapV3Liquidity(
     // Result is two arrays, one for sqrtPrice and one for liquidity.
     let sqrtPriceList = result[0];
     let liquidityList = result[1];
+    let amount0List = result[2];
+    let amount1List = result[3];
 
     for (let i = 0; i < poolAddresses.length; i++) {
         pools[poolAddresses[i]].extra.sqrtPriceX96 = BigInt(sqrtPriceList[i]);
         pools[poolAddresses[i]].extra.liquidity = BigInt(liquidityList[i]);
+        pools[poolAddresses[i]].extra.amount0 = BigInt(amount0List[i]);
+        pools[poolAddresses[i]].extra.amount1 = BigInt(amount1List[i]);
     }
 }
 
