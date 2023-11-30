@@ -58,7 +58,7 @@ contract FilterTrapToken is Script, StdCheats {
         address[] memory validTokenAddresses = new address[](pools.length);
         address[] memory invalidTokenAddresses = new address[](pools.length);
         // bool result = isFork();
-        for (uint256 i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < pools.length; i++) {
             bool result = isTrapToken(pools[i], tokens[i]);
             if (result) {
                 invalidTokenAddresses[i] = tokens[i];
