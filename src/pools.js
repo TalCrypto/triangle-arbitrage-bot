@@ -5,16 +5,14 @@ const cliProgress = require('cli-progress');
 
 const { logger, CACHED_POOLS_FILE } = require('./constants');
 
-const Erc20Abi = [
-    'function decimals() external view returns (uint8)'
-];
+const Erc20Abi = ['function decimals() external view returns (uint8)'];
 
 const V2FactoryAbi = [
-    'event PairCreated(address indexed token0, address indexed token1, address pair, uint)'
+    'event PairCreated(address indexed token0, address indexed token1, address pair, uint)',
 ];
 
 const V3FactoryAbi = [
-    'event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)'
+    'event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)',
 ];
 
 const DexVariant = {
@@ -23,13 +21,7 @@ const DexVariant = {
 };
 
 class Pool {
-    constructor(
-        address,
-        version,
-        token0,
-        token1,
-        extra,
-    ) {
+    constructor(address, version, token0, token1, extra) {
         this.address = address;
         this.version = version;
         this.token0 = token0;
@@ -52,16 +44,16 @@ const range = (start, stop, step) => {
     let loopCnt = Math.ceil((stop - start) / step);
     let rangeArray = [];
     for (let i = 0; i < loopCnt; i++) {
-        let fromBlock = start + (i * step);
+        let fromBlock = start + i * step;
         let toBlock = Math.min(fromBlock + step, stop);
         rangeArray.push([fromBlock, toBlock]);
     }
     return rangeArray;
-}
+};
 
 function loadCachedPools() {
     let cacheFile = path.join(__dirname, '..', CACHED_POOLS_FILE);
-    let pools = {}
+    let pools = {};
     if (fs.existsSync(cacheFile)) {
         const content = fs.readFileSync(cacheFile, 'utf-8');
         const rows = content.split('\n');
@@ -69,14 +61,17 @@ function loadCachedPools() {
             if (row == '') continue;
             row = row.split(',');
             if (row[0] == 'address') continue;
-            let version = row[1] == '2' ? DexVariant.UniswapV2 : DexVariant.UniswapV3;
-            let pool = new Pool(row[0],
-                                version,
-                                row[2],
-                                row[3],
-                                parseInt(row[4]),
-                                parseInt(row[5]),
-                                parseInt(row[6]))
+            let version =
+                row[1] == '2' ? DexVariant.UniswapV2 : DexVariant.UniswapV3;
+            let pool = new Pool(
+                row[0],
+                version,
+                row[2],
+                row[3],
+                parseInt(row[4]),
+                parseInt(row[5]),
+                parseInt(row[6])
+            );
             pools[row[0]] = pool;
         }
     }
@@ -84,7 +79,15 @@ function loadCachedPools() {
 }
 
 function cacheSyncedPools(pools) {
-    const columns = ['address', 'version', 'token0', 'token1', 'decimals0', 'decimals1', 'fee'];
+    const columns = [
+        'address',
+        'version',
+        'token0',
+        'token1',
+        'decimals0',
+        'decimals1',
+        'fee',
+    ];
     let data = columns.join(',') + '\n';
     for (let address in pools) {
         let pool = pools[address];
@@ -94,7 +97,6 @@ function cacheSyncedPools(pools) {
     let cacheFile = path.join(__dirname, '..', CACHED_POOLS_FILE);
     fs.writeFileSync(cacheFile, data, { encoding: 'utf-8' });
 }
-
 
 // Use 'getEventsRecursive' to get all the events from a contract.
 async function loadAllPoolsFromV2(provider, factoryAddresses) {
@@ -108,21 +110,33 @@ async function loadAllPoolsFromV2(provider, factoryAddresses) {
     for (let i = 0; i < factoryAddresses.length; i++) {
         // Use more efficient method to get events
         const factoryAddress = factoryAddresses[i];
-        const factoryContract = new ethers.Contract(factoryAddress, V2FactoryAbi, provider);
+        const factoryContract = new ethers.Contract(
+            factoryAddress,
+            V2FactoryAbi,
+            provider
+        );
         const eventFilter = factoryContract.filters.PairCreated();
         const iface = new ethers.utils.Interface(V2FactoryAbi);
-        const events = await getEventsRecursive(provider, eventFilter, iface, 0, toBlock);
-        
+        const events = await getEventsRecursive(
+            provider,
+            eventFilter,
+            iface,
+            0,
+            toBlock
+        );
+
         for (let event of events) {
             let token0 = event.args[0]; // token address
             let token1 = event.args[1];
 
             // Do not use decimals for now
-            let pool = new Pool(event.args[2], // pool address
+            let pool = new Pool(
+                event.args[2], // pool address
                 DexVariant.UniswapV2,
                 token0,
                 token1,
-                {fee: 30});// In basis points
+                { fee: 30 }
+            ); // In basis points
             pools[event.args[2]] = pool;
         }
     }
@@ -139,10 +153,20 @@ async function loadAllPoolsFromV3(provider, factoryAddresses) {
     for (let i = 0; i < factoryAddresses.length; i++) {
         // Use more efficient method to get events
         const factoryAddress = factoryAddresses[i];
-        const factoryContract = new ethers.Contract(factoryAddress, V3FactoryAbi, provider);
+        const factoryContract = new ethers.Contract(
+            factoryAddress,
+            V3FactoryAbi,
+            provider
+        );
         const eventFilter = factoryContract.filters.PoolCreated();
         const iface = new ethers.utils.Interface(V3FactoryAbi);
-        const events = await getEventsRecursive(provider, eventFilter, iface, 0, toBlock);
+        const events = await getEventsRecursive(
+            provider,
+            eventFilter,
+            iface,
+            0,
+            toBlock
+        );
 
         for (let event of events) {
             // event.args = [token0, token1, fee, tickSpacing, pool]
@@ -150,14 +174,16 @@ async function loadAllPoolsFromV3(provider, factoryAddresses) {
             let token1 = event.args[1];
 
             // Do not use decimals for now
-            let pool = new Pool(event.args[4], // pool address
+            let pool = new Pool(
+                event.args[4], // pool address
                 DexVariant.UniswapV3,
                 token0,
                 token1,
                 {
-                    fee: event.args[2]/100, // fee
+                    fee: event.args[2] / 100, // fee
                     tickSpacing: event.args[3], // tickSpacing
-                });
+                }
+            );
             pools[event.args[4]] = pool; // pool address
         }
     }
@@ -166,7 +192,13 @@ async function loadAllPoolsFromV3(provider, factoryAddresses) {
 }
 
 // Get events from a contract recursively. If there is an error, split the block range in half and try again.
-async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlock) {
+async function getEventsRecursive(
+    provider,
+    eventFilter,
+    iface,
+    fromBlock,
+    toBlock
+) {
     // Node providers typically limit to 10k events per request.
     //
     // eventFilter: ethers.Contract.filters object
@@ -174,7 +206,7 @@ async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlo
     // toBlock: int
     //
     // returns: array of events
-    
+
     try {
         let events = await provider.getLogs({
             address: eventFilter.address,
@@ -189,8 +221,20 @@ async function getEventsRecursive(provider, eventFilter, iface, fromBlock, toBlo
     } catch (e) {
         let midBlock = Math.floor((fromBlock + toBlock) / 2);
 
-        let events1 = await getEventsRecursive(provider, eventFilter, iface, fromBlock, midBlock);
-        let events2 = await getEventsRecursive(provider, eventFilter, iface, midBlock + 1, toBlock);
+        let events1 = await getEventsRecursive(
+            provider,
+            eventFilter,
+            iface,
+            fromBlock,
+            midBlock
+        );
+        let events2 = await getEventsRecursive(
+            provider,
+            eventFilter,
+            iface,
+            midBlock + 1,
+            toBlock
+        );
         return events1.concat(events2);
     }
 }
@@ -214,7 +258,7 @@ function keepPoolsWithLiquidity(pools) {
 }
 
 // Returns the pools found in the given paths.
-function extractPoolsFromPaths(paths){
+function extractPoolsFromPaths(paths) {
     let pools = {};
     for (let path of paths) {
         for (let pool of path.pools) {
@@ -252,7 +296,7 @@ function indexPathsByPools(paths) {
 }
 
 // Heuristic to pre-select the paths to evaluate
-function preSelectPaths(pathArray, nPaths, alpha){
+function preSelectPaths(pathArray, nPaths, alpha) {
     // pathArray: array of paths to pre-select from
     // nPaths: number of paths to pre-select
     // alpha: fraction of paths to pre-select by liquidity or by random selection
@@ -274,8 +318,12 @@ function preSelectPaths(pathArray, nPaths, alpha){
     }
 
     // Sort paths by liquidity product
-    sortedPath = pathArrayCopy.sort((a, b) => (a.liquidityProduct > b.liquidityProduct) ? -1 : 1);
-    sortedPath.sort((a, b) => (a.liquidityProduct > b.liquidityProduct) ? -1 : 1);
+    sortedPath = pathArrayCopy.sort((a, b) =>
+        a.liquidityProduct > b.liquidityProduct ? -1 : 1
+    );
+    sortedPath.sort((a, b) =>
+        a.liquidityProduct > b.liquidityProduct ? -1 : 1
+    );
 
     // Add the top alpha fraction of paths by liquidity
     let nLiquidityPaths = Math.floor(alpha * nPaths);

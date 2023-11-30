@@ -1,0 +1,14 @@
+{
+    "editor.formatOnSave": false,
+    "editor.tabSize": 2,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": true
+    },
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[solidity]": {
+        "editor.defaultFormatter": "JuanBlanco.solidity"
+    },
+}
