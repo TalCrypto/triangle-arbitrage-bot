@@ -54,7 +54,7 @@ function getSqrtRatioAtTick(tick) {
     // this divides by 1<<32 rounding up to go from a Q128.128 to a Q128.96.
     // we then downcast because we know the result always fits within 160 bits due to our tick input constraint
     // we round up in the division so getTickAtSqrtRatio of the output price is always consistent
-    sqrtPriceX96 = (ratio >> 32n) + (ratio % (1n << 32n) == 0 ? 0n : 1n);
+    let sqrtPriceX96 = (ratio >> 32n) + (ratio % (1n << 32n) == 0 ? 0n : 1n);
     return sqrtPriceX96;
 }
 
