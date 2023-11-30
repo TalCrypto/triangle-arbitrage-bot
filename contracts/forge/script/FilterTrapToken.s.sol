@@ -40,7 +40,7 @@ contract FilterTrapToken is Script, StdCheats {
                 return true;
             }
             uint256 balanceAfter = abi.decode(data, (uint256));
-            if (balanceAfter - balanceBefore == amount) {
+            if (balanceAfter == amount + balanceBefore) {
                 return false;
             } else {
                 return true;
