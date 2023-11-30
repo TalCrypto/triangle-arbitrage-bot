@@ -539,7 +539,7 @@ async function main() {
                     logger,
                     signer,
                     lastTxCount,
-                    competiveTxArray[competiveTxArray.length - 1].txnData
+                    competiveTxArray[0].txnData
                 );
             } else {
                 let lastGasPrice = await wsProvider.getGasPrice();
