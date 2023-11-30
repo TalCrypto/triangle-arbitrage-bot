@@ -32,11 +32,21 @@ contract FilterTrapToken is Script, StdCheats {
         changePrank(poolAddress);
         // deal(tokenAddress, address(this), amount);
 
-        uint256 balanceBefore = IERC20(tokenAddress).balanceOf(target);
-        (bool success, bytes memory data) = tokenAddress.call(abi.encodeWithSelector(0xa9059cbb, target, amount));
+        // get balance, it sometimes fails in toxic tokens
+        (bool success, bytes memory data) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, target));
+        if(!success) {
+            return true;
+        }
+        uint256 balanceBefore = abi.decode(data, (uint256));
+
+        // token transfer
+        (success, data) = tokenAddress.call(abi.encodeWithSelector(IERC20.transfer.selector, target, amount));
         if(success && (data.length == 0 || abi.decode(data, (bool)))) {
-            // IERC20(tokenAddress).transfer(target, amount);
-            uint256 balanceAfter = IERC20(tokenAddress).balanceOf(target);
+            (success, data) = tokenAddress.staticcall(abi.encodeWithSelector(IERC20.balanceOf.selector, target));
+            if(!success) {
+                return true;
+            }
+            uint256 balanceAfter = abi.decode(data, (uint256));
             if (balanceAfter - balanceBefore == amount) {
                 return false;
             } else {
@@ -58,7 +68,7 @@ contract FilterTrapToken is Script, StdCheats {
         address[] memory validTokenAddresses = new address[](pools.length);
         address[] memory invalidTokenAddresses = new address[](pools.length);
         // bool result = isFork();
-        for (uint256 i = 0; i < pools.length; i++) {
+        for (uint256 i = 0; i < 10; i++) {
             bool result = isTrapToken(pools[i], tokens[i]);
             if (result) {
                 invalidTokenAddresses[i] = tokens[i];
