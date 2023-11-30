@@ -212,11 +212,12 @@ function computeProfit(amountIn, path) {
 // Find the optimal input amount for an arbitrage path.
 function optimizeAmountIn(path) {
     // To find the local maximum, we calculate the derivative of the profit function at the middle point of the interval. Assume the profit function is convex.
-    let min = BigInt(1);
+    let min = BigInt(0);
     let max = BigInt(10 ** 30);
 
     while (computeProfit(max, path) < 0) {
         max = max / 10n;
+        if(max == 0n) return 0;
     }
     while (computeProfit(max, path) > 0) {
         max = max * 2n;
@@ -254,7 +255,6 @@ function optimizeAmountIn(path) {
         } else {
             max = mid;
         }
-        // console.log(min, max);
     }
 }
 
