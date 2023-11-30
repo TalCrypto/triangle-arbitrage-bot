@@ -204,19 +204,17 @@ async function buildBlankTx(
 ) {
     // Sends a transaction of a few wei to itself, to test the inclusion latency.
 
-    let obj = [
-        await signer.signTransaction({
-            to: signer.address,
-            data: '0x',
-            type: 2,
-            gasLimit: 1000000, // 1M gas
-            maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
-            maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
-            nonce: lastTxCount,
-            chainId: CHAIN_ID,
-            value: targetBlock % 100, // Last 2 digits of targetBlock is the wei value.
-        }),
-    ];
+    let obj = await signer.signTransaction({
+        to: signer.address,
+        data: '0x',
+        type: 2,
+        gasLimit: 1000000, // 1M gas
+        maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
+        maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
+        nonce: lastTxCount,
+        chainId: CHAIN_ID,
+        value: targetBlock % 100, // Last 2 digits of targetBlock is the wei value.
+    });
 
     return obj;
 }
@@ -234,21 +232,19 @@ async function buildTx(
     // Action that triggers the chain. Starts with a call to pool0.
     let initialAction = getInitialAction(path, tradeContract, tokens, logger);
 
-    let obj = [
-        await signer.signTransaction({
-            to: tradeContract.address,
-            data: tradeContract.interface.encodeFunctionData('execute', [
-                initialAction,
-            ]),
-            type: 2,
-            gasLimit: 1000000, // 1M gas
-            maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
-            maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
-            nonce: lastTxCount,
-            chainId: CHAIN_ID,
-            value: 0,
-        }),
-    ];
+    let obj = await signer.signTransaction({
+        to: tradeContract.address,
+        data: tradeContract.interface.encodeFunctionData('execute', [
+            initialAction,
+        ]),
+        type: 2,
+        gasLimit: 1000000, // 1M gas
+        maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
+        maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
+        nonce: lastTxCount,
+        chainId: CHAIN_ID,
+        value: 0,
+    });
 
     return obj;
 }
@@ -265,20 +261,18 @@ async function buildLegacyTx(
     // Action that triggers the chain. Starts with a call to pool0.
     let initialAction = getInitialAction(path, tradeContract, tokens, logger);
 
-    let obj = [
-        await signer.signTransaction({
-            to: tradeContract.address,
-            data: tradeContract.interface.encodeFunctionData('execute', [
-                initialAction,
-            ]),
-            type: 0,
-            gasLimit: 1000000, // 1M gas
-            gasPrice,
-            nonce: lastTxCount,
-            chainId: CHAIN_ID,
-            value: 0,
-        }),
-    ];
+    let obj = await signer.signTransaction({
+        to: tradeContract.address,
+        data: tradeContract.interface.encodeFunctionData('execute', [
+            initialAction,
+        ]),
+        type: 0,
+        gasLimit: 1000000, // 1M gas
+        gasPrice,
+        nonce: lastTxCount,
+        chainId: CHAIN_ID,
+        value: 0,
+    });
 
     return obj;
 }
@@ -297,36 +291,32 @@ async function buildBackRunTx(
 
     let obj;
     if (targetTx['type'] == 2)
-        obj = [
-            await signer.signTransaction({
-                to: tradeContract.address,
-                data: tradeContract.interface.encodeFunctionData('execute', [
-                    initialAction,
-                ]),
-                type: 2,
-                gasLimit: 1000000, // 1M gas
-                maxFeePerGas: targetTx['maxFeePerGas'],
-                maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas'],
-                nonce: lastTxCount,
-                chainId: CHAIN_ID,
-                value: 0,
-            }),
-        ];
+        obj = await signer.signTransaction({
+            to: tradeContract.address,
+            data: tradeContract.interface.encodeFunctionData('execute', [
+                initialAction,
+            ]),
+            type: 2,
+            gasLimit: 1000000, // 1M gas
+            maxFeePerGas: targetTx['maxFeePerGas'],
+            maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas'],
+            nonce: lastTxCount,
+            chainId: CHAIN_ID,
+            value: 0,
+        });
     else
-        obj = [
-            await signer.signTransaction({
-                to: tradeContract.address,
-                data: tradeContract.interface.encodeFunctionData('execute', [
-                    initialAction,
-                ]),
-                type: 0,
-                gasLimit: 1000000, // 1M gas
-                gasPrice: targetTx['gasPrice'],
-                nonce: lastTxCount,
-                chainId: CHAIN_ID,
-                value: 0,
-            }),
-        ];
+        obj = await signer.signTransaction({
+            to: tradeContract.address,
+            data: tradeContract.interface.encodeFunctionData('execute', [
+                initialAction,
+            ]),
+            type: 0,
+            gasLimit: 1000000, // 1M gas
+            gasPrice: targetTx['gasPrice'],
+            nonce: lastTxCount,
+            chainId: CHAIN_ID,
+            value: 0,
+        });
 
     return obj;
 }
@@ -345,38 +335,34 @@ async function buildFrontRunTx(
 
     let obj;
     if (targetTx['type'] == 2)
-        obj = [
-            await signer.signTransaction({
-                to: tradeContract.address,
-                data: tradeContract.interface.encodeFunctionData('execute', [
-                    initialAction,
-                ]),
-                type: 2,
-                gasLimit: 1000000, // 1M gas
-                maxFeePerGas: targetTx['maxFeePerGas'],
-                maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas']
-                    .mul(101)
-                    .div(100),
-                nonce: lastTxCount,
-                chainId: CHAIN_ID,
-                value: 0,
-            }),
-        ];
+        obj = await signer.signTransaction({
+            to: tradeContract.address,
+            data: tradeContract.interface.encodeFunctionData('execute', [
+                initialAction,
+            ]),
+            type: 2,
+            gasLimit: 1000000, // 1M gas
+            maxFeePerGas: targetTx['maxFeePerGas'],
+            maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas']
+                .mul(101)
+                .div(100),
+            nonce: lastTxCount,
+            chainId: CHAIN_ID,
+            value: 0,
+        });
     else
-        obj = [
-            await signer.signTransaction({
-                to: tradeContract.address,
-                data: tradeContract.interface.encodeFunctionData('execute', [
-                    initialAction,
-                ]),
-                type: 0,
-                gasLimit: 1000000, // 1M gas
-                gasPrice: targetTx['gasPrice'].mul(101).div(100),
-                nonce: lastTxCount,
-                chainId: CHAIN_ID,
-                value: 0,
-            }),
-        ];
+        obj = await signer.signTransaction({
+            to: tradeContract.address,
+            data: tradeContract.interface.encodeFunctionData('execute', [
+                initialAction,
+            ]),
+            type: 0,
+            gasLimit: 1000000, // 1M gas
+            gasPrice: targetTx['gasPrice'].mul(101).div(100),
+            nonce: lastTxCount,
+            chainId: CHAIN_ID,
+            value: 0,
+        });
 
     return obj;
 }

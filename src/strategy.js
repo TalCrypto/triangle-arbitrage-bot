@@ -62,14 +62,17 @@ async function main() {
     const factoryAddresses_v3 = ['0x1F98431c8aD98523631AE4a59f267346ea31F984']; // Uniswap v3
 
     // Reading approved tokens from file into an object
-    let dumpTokens = JSON.parse(fs.readFileSync('data/dump_token_info.json', 'utf8'));
+    let dumpTokens = JSON.parse(
+        fs.readFileSync('data/dump_token_info.json', 'utf8')
+    );
     let approvedTokenArray = JSON.parse(
         fs.readFileSync('contracts/forge/external/validTokens.json', 'utf8')
     )['valid'];
-    let approvedTokens = {}
-    for(let approvedTokenAddress of approvedTokenArray) {
-        if(approvedTokenAddress != ethers.constants.AddressZero) {
-            approvedTokens[approvedTokenAddress] = dumpTokens[approvedTokenAddress]
+    let approvedTokens = {};
+    for (let approvedTokenAddress of approvedTokenArray) {
+        if (approvedTokenAddress != ethers.constants.AddressZero) {
+            approvedTokens[approvedTokenAddress] =
+                dumpTokens[approvedTokenAddress];
         }
     }
     logger.info(`Approved token count: ${Object.keys(approvedTokens).length}`);
@@ -540,7 +543,7 @@ async function main() {
 
             const tx = await wsProvider.send(
                 'eth_sendRawTransaction',
-                txObject
+                [txObject]
             );
 
             //   logger.info(`${JSON.stringify(pendingTxArray)}`);
@@ -605,31 +608,7 @@ async function main() {
 
             const blockNumber = await wsProvider.getBlockNumber();
 
-            // if touching pools, then cache it in order to simulate
-            pendingTxArray.push({ blockNumber, txnData });
-
-            //   fs.writeFileSync("data/pendings.json", `${pendingTx}, `, { flag: "a" });
-
-            // sort pending transactions by the gas price, if gas price same, then prioritize legacy tx
-            pendingTxArray
-                .sort((a, b) => {
-                    if (b.txnData['gasPrice'].gt(a.txnData['gasPrice'])) {
-                        return 1;
-                    } else {
-                        return 0;
-                    }
-                })
-                .sort((a, b) => {
-                    if (
-                        b.txnData['gasPrice'].eq(a.txnData['gasPrice']) &&
-                        b.txnData['type'] == 0 &&
-                        a.txnData['type'] == 2
-                    ) {
-                        return 1;
-                    } else {
-                        return 0;
-                    }
-                });
+            cachePendingTransaction(blockNumber, txnData);
         } catch (e) {
             logger.error(
                 `Error while processing transaction ${pendingTx}: ${e}`

@@ -166,7 +166,7 @@ function exactTokensOut(amountIn, pool, zfo) {
                 amountOut = (liquidity * (spbx - spax)) / q96;
                 // If zeroForOne is true, token1 is out
                 // check if out amount is bigger than the actual amount
-                if(amountOut > pool.extra.amount1) {
+                if (amountOut > pool.extra.amount1) {
                     amountOut = 0n;
                 }
             } else {
@@ -192,7 +192,7 @@ function exactTokensOut(amountIn, pool, zfo) {
                 amountOut = (liquidity * q96 * (spbx - spax)) / spax / spbx;
                 // If zeroForOne is false, token0 is out
                 // check if out amount is bigger than the actual amount
-                if(amountOut > pool.extra.amount0) {
+                if (amountOut > pool.extra.amount0) {
                     amountOut = 0n;
                 }
             }
@@ -227,7 +227,7 @@ function optimizeAmountIn(path) {
 
     while (computeProfit(max, path) < 0) {
         max = max / 10n;
-        if(max == 0n) return 0n;
+        if (max == 0n) return 0n;
     }
     while (computeProfit(max, path) > 0) {
         max = max * 2n;
