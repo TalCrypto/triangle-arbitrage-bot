@@ -1,26 +1,36 @@
 [
     {
+        "type": "function",
+        "name": "getLiquidityV3",
         "inputs": [
             {
-                "internalType": "contract IUniswapV3Pool[]",
                 "name": "_pools",
-                "type": "address[]"
+                "type": "address[]",
+                "internalType": "contract IUniswapV3Pool[]"
             }
         ],
-        "name": "getLiquidityV3",
         "outputs": [
             {
-                "internalType": "uint160[]",
                 "name": "",
-                "type": "uint160[]"
+                "type": "uint160[]",
+                "internalType": "uint160[]"
             },
             {
-                "internalType": "int128[]",
                 "name": "",
-                "type": "int128[]"
+                "type": "int128[]",
+                "internalType": "int128[]"
+            },
+            {
+                "name": "",
+                "type": "uint256[]",
+                "internalType": "uint256[]"
+            },
+            {
+                "name": "",
+                "type": "uint256[]",
+                "internalType": "uint256[]"
             }
         ],
-        "stateMutability": "view",
-        "type": "function"
+        "stateMutability": "view"
     }
 ]

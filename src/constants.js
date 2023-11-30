@@ -151,7 +151,7 @@ module.exports = {
     SAFE_TOKENS: SAFE_TOKENS,
 
     // FlashQueryV3
-    FLASH_QUERY_V3_ADDRESS: '0xa5aeC6cF29e66fD47F6a05dcc0c8aCD308d80B4E',
+    FLASH_QUERY_V3_ADDRESS: '0x1738550B056abfD7bff2B9652414DF48123273F9',
 
     // List of low quality rpc endpoints that which we will propagate our transactions to.
     HTTPS_ENDPOINTS: [
