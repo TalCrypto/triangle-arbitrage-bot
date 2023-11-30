@@ -217,7 +217,7 @@ function optimizeAmountIn(path) {
 
     while (computeProfit(max, path) < 0) {
         max = max / 10n;
-        if(max == 0n) return 0;
+        if(max == 0n) return 0n;
     }
     while (computeProfit(max, path) > 0) {
         max = max * 2n;
