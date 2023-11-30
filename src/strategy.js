@@ -11,7 +11,7 @@ const {
     TRADE_CONTRACT_ADDRESS,
     SAFE_TOKENS,
     CHAIN_ID,
-    HTTP_ENDPOINTS,
+    HTTPS_ENDPOINTS,
 } = require('./constants');
 
 const { logger } = require('./constants');
@@ -39,7 +39,7 @@ async function main() {
     const wss = new ethers.providers.WebSocketProvider(WSS_URL);
     const provider = new ethers.providers.JsonRpcProvider(HTTPS_URL);
     const providerReserves = new ethers.providers.JsonRpcProvider(HTTPS2_URL);
-    let providers = HTTP_ENDPOINTS.map(
+    let providers = HTTPS_ENDPOINTS.map(
         (endpoint) => new ethers.providers.JsonRpcProvider(endpoint)
     );
     providers = providers.concat([wss, provider, providerReserves]);
