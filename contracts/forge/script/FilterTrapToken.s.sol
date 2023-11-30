@@ -19,15 +19,8 @@ contract FilterTrapToken is Script, StdCheats {
         address poolAddress,
         address tokenAddress
     ) internal returns (bool) {
-        uint256 amount = 1e6;
-        uint256 poolBalance = IERC20(tokenAddress).balanceOf(poolAddress);
-        if (poolBalance < amount) {
-            amount = poolBalance / 2;
-        }
-        if(amount == 0) {
-            return true;
-        }
-
+        // assume the token balance of pool is bigger than 10_000, else not enough liquidity as we consider down to 3 decimals
+        uint256 amount = 1e4;
         address target = address(1);
         changePrank(poolAddress);
         // deal(tokenAddress, address(this), amount);
