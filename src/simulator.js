@@ -164,6 +164,11 @@ function exactTokensOut(amountIn, pool, zfo) {
                 let spax = sqrtPricePrimeX96;
                 let spbx = sqrtPriceX96;
                 amountOut = (liquidity * (spbx - spax)) / q96;
+                // If zeroForOne is true, token1 is out
+                // check if out amount is bigger than the actual amount
+                if(amountOut > pool.extra.amount1) {
+                    amountOut = 0n;
+                }
             } else {
                 // If zeroForOne is False, the swap makes sqrtPrice larger.
                 let sqrtPricePrimeX96 =
@@ -185,6 +190,11 @@ function exactTokensOut(amountIn, pool, zfo) {
                 let spax = sqrtPriceX96;
                 let spbx = sqrtPricePrimeX96;
                 amountOut = (liquidity * q96 * (spbx - spax)) / spax / spbx;
+                // If zeroForOne is false, token0 is out
+                // check if out amount is bigger than the actual amount
+                if(amountOut > pool.extra.amount0) {
+                    amountOut = 0n;
+                }
             }
         } catch (e) {
             logger.error(`DEBUG: Error in Uniswap V3 math: ${e}`);
