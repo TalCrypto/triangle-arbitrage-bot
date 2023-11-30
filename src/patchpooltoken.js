@@ -34,7 +34,6 @@ async function dumpTokens() {
         fs.readFileSync('data/dump_token_info.json', 'utf8')
     );
     console.log('Valid token count: ', Object.keys(filteredTokenInfo).length);
-    
 
     // Make an eth_call to the tokenTools contract to get the pool info
     const poolListFull = [];

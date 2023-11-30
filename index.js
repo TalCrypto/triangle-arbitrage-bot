@@ -60,13 +60,11 @@ if (buildFlag == '-build' || buildFlag == '-b') {
     console.log(`Profiling block arrivals for ${probeDuration} minutes...`);
     // Profile block arrivals
     profileBlockArrivals(probeDuration * 60 * 1000);
-
-} else if (buildFlag == "-mempool") {
+} else if (buildFlag == '-mempool') {
     const wssURL = args[1];
     const numBlocks = args[2];
     profileMempool(wssURL, numBlocks);
-}
-else if (!buildFlag) {
+} else if (!buildFlag) {
     // Run the bot. First, check if the .env file exists
     const dotenv = require('dotenv');
     const fs = require('fs');
