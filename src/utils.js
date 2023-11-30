@@ -167,6 +167,10 @@ function sqrtBigInt(n) {
         throw 'Square root of negative numbers is not supported';
     }
 
+    if (n < 2n) {
+        return n;
+    }
+
     function newtonIteration(n, x0) {
         const x1 = (n / x0 + x0) >> 1n;
         if (x0 === x1 || x0 === x1 - 1n) {
