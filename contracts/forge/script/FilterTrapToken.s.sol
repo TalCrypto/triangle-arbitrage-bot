@@ -62,7 +62,6 @@ contract FilterTrapToken is Script, StdCheats {
             bool result = isTrapToken(pools[i], tokens[i]);
             if (result) {
                 invalidTokenAddresses[i] = tokens[i];
-                console.log("invalid", tokens[i]);
             } else {
                 validTokenAddresses[i] = tokens[i];
             }
