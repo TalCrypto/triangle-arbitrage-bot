@@ -62,10 +62,16 @@ async function main() {
     const factoryAddresses_v3 = ['0x1F98431c8aD98523631AE4a59f267346ea31F984']; // Uniswap v3
 
     // Reading approved tokens from file into an object
-    // let approvedTokens = JSON.parse(fs.readFileSync('data/dump_token_info.json', 'utf8'));
-    let approvedTokens = JSON.parse(
-        fs.readFileSync('data/dump_valid_tokens.json', 'utf8')
-    );
+    let dumpTokens = JSON.parse(fs.readFileSync('data/dump_token_info.json', 'utf8'));
+    let approvedTokenArray = JSON.parse(
+        fs.readFileSync('contracts/forge/external/validTokens.json', 'utf8')
+    )['valid'];
+    let approvedTokens = {}
+    for(let approvedTokenAddress of approvedTokenArray) {
+        if(approvedTokenAddress != ethers.constants.AddressZero) {
+            approvedTokens[approvedTokenAddress] = dumpTokens[approvedTokenAddress]
+        }
+    }
     logger.info(`Approved token count: ${Object.keys(approvedTokens).length}`);
 
     let pools_v2, pools_v3;
