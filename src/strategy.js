@@ -569,19 +569,16 @@ async function main() {
                 }`
             );
 
-            const txHash = await wsProvider.send(
-                'eth_sendRawTransaction',
-                [txObject]
-            );
+            const txHash = await wsProvider.send('eth_sendRawTransaction', [
+                txObject,
+            ]);
 
             const txnData = await wsProvider.getTransaction(txHash);
 
             cachePendingTransaction(blockNumber, txnData);
 
-            //   logger.info(`${JSON.stringify(pendingTxArray)}`);
-
             logger.info(
-                `Finished sending. End-to-end delay ${
+                `Finished sending tx: ${txHash}. End-to-end delay ${
                     (Date.now() - sblock) / 1000
                 } s`
             );
