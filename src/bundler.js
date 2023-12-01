@@ -208,7 +208,7 @@ async function buildBlankTx(
         to: signer.address,
         data: '0x',
         type: 2,
-        gasLimit: 1000000, // 1M gas
+        gasLimit: 2000000, // 2M gas
         maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
         maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
         nonce: lastTxCount,
@@ -226,8 +226,8 @@ async function buildTx(
     logger,
     signer,
     lastTxCount,
-    lastGasPrice,
-    tipPercent
+    maxFeePerGas,
+    maxPriorityFeePerGas
 ) {
     // Action that triggers the chain. Starts with a call to pool0.
     let initialAction = getInitialAction(path, tradeContract, tokens, logger);
@@ -238,9 +238,9 @@ async function buildTx(
             initialAction,
         ]),
         type: 2,
-        gasLimit: 1000000, // 1M gas
-        maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
-        maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
+        gasLimit: 2000000, // 2M gas
+        maxFeePerGas,
+        maxPriorityFeePerGas,
         nonce: lastTxCount,
         chainId: CHAIN_ID,
         value: 0,
@@ -267,7 +267,7 @@ async function buildLegacyTx(
             initialAction,
         ]),
         type: 0,
-        gasLimit: 1000000, // 1M gas
+        gasLimit: 2000000, // 2M gas
         gasPrice,
         nonce: lastTxCount,
         chainId: CHAIN_ID,
@@ -297,7 +297,7 @@ async function buildBackRunTx(
                 initialAction,
             ]),
             type: 2,
-            gasLimit: 1000000, // 1M gas
+            gasLimit: 2000000, // 2M gas
             maxFeePerGas: targetTx['maxFeePerGas'],
             maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas'],
             nonce: lastTxCount,
@@ -311,7 +311,7 @@ async function buildBackRunTx(
                 initialAction,
             ]),
             type: 0,
-            gasLimit: 1000000, // 1M gas
+            gasLimit: 2000000, // 2M gas
             gasPrice: targetTx['gasPrice'],
             nonce: lastTxCount,
             chainId: CHAIN_ID,
@@ -341,7 +341,7 @@ async function buildFrontRunTx(
                 initialAction,
             ]),
             type: 2,
-            gasLimit: 1000000, // 1M gas
+            gasLimit: 2000000, // 2M gas
             maxFeePerGas: targetTx['maxFeePerGas'],
             maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas']
                 .mul(101)
@@ -357,7 +357,7 @@ async function buildFrontRunTx(
                 initialAction,
             ]),
             type: 0,
-            gasLimit: 1000000, // 1M gas
+            gasLimit: 2000000, // 2M gas
             gasPrice: targetTx['gasPrice'].mul(101).div(100),
             nonce: lastTxCount,
             chainId: CHAIN_ID,

@@ -542,16 +542,25 @@ async function main() {
                     competiveTxArray[0].txnData
                 );
             } else {
-                let lastGasPrice = await wsProvider.getGasPrice();
-                // if there aren't competive transactions, build normal legacy transactions
-                txObject = await buildLegacyTx(
+                const block = await wsProvider.getBlock();
+
+                // if there aren't competive transactions, build type2 transactions
+
+                // set maxPriorityFee as 60 gwei, this amount is enough to be included in the n+2 block
+                const maxPriorityFee = ethers.utils.parseUnits("60", "gwei");
+
+                // set maxFeePerGas as (baseFee of previous) * 2 + maxPriorityFee
+                // this guarantees tx will be included within the next 5 blocks
+                const maxFeePerGas = block.baseFeePerGas.mul(2).add(maxPriorityFee);
+
+                txObject = await buildTx(
                     path,
                     tradeContract,
                     approvedTokens,
                     logger,
                     signer,
-                    lastTxCount,
-                    lastGasPrice
+                    maxFeePerGas,
+                    maxPriorityFee
                 );
             }
 
