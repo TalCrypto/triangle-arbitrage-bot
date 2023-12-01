@@ -561,6 +561,7 @@ async function main() {
                     approvedTokens,
                     logger,
                     signer,
+                    lastTxCount,
                     maxFeePerGas,
                     maxPriorityFee
                 );
@@ -581,7 +582,7 @@ async function main() {
             );
 
             const txHash = await wsProvider.send('eth_sendRawTransaction', [
-                txObject,
+                txObject
             ]);
 
             const txnData = await wsProvider.getTransaction(txHash);
