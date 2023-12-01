@@ -141,6 +141,11 @@ function exactTokensOut(amountIn, pool, zfo) {
         let tickSpacing = pool.extra.tickSpacing;
         let currentTick = getTickAtSqrtRatio(sqrtPriceX96);
 
+        // liquidity check
+        if (liquidity == 0n) {
+            return 0n;
+        }
+
         try {
             if (zfo) {
                 // If zeroForOne is True, the swap makes sqrtPrice smaller.

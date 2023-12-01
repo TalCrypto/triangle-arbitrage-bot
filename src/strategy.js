@@ -582,7 +582,7 @@ async function main() {
             );
 
             const txHash = await wsProvider.send('eth_sendRawTransaction', [
-                txObject
+                txObject,
             ]);
 
             const txnData = await wsProvider.getTransaction(txHash);
