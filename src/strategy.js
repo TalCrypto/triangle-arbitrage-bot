@@ -547,11 +547,13 @@ async function main() {
                 // if there aren't competive transactions, build type2 transactions
 
                 // set maxPriorityFee as 60 gwei, this amount is enough to be included in the n+2 block
-                const maxPriorityFee = ethers.utils.parseUnits("60", "gwei");
+                const maxPriorityFee = ethers.utils.parseUnits('60', 'gwei');
 
                 // set maxFeePerGas as (baseFee of previous) * 2 + maxPriorityFee
                 // this guarantees tx will be included within the next 5 blocks
-                const maxFeePerGas = block.baseFeePerGas.mul(2).add(maxPriorityFee);
+                const maxFeePerGas = block.baseFeePerGas
+                    .mul(2)
+                    .add(maxPriorityFee);
 
                 txObject = await buildTx(
                     path,
