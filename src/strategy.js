@@ -582,6 +582,8 @@ async function main() {
                 `Estimated Gas Fee: $${gasFeeUSD}`
             );
 
+            let txObject;
+
             if(maxPriorityFeePerGas) {
                 txObject = await buildTx(
                     path,
