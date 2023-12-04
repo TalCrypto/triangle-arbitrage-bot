@@ -14,6 +14,7 @@ const {
     WS_LOCAL,
     MULTICALL_ABI,
     MULTICALL_ADDRESS,
+    GAS_LIMIT,
 } = require('./constants');
 
 const { logger } = require('./constants');
@@ -33,6 +34,7 @@ const {
     extractLogsFromSimulation,
     getPoolsFromLogs,
     isSamePendingArrays,
+    getMaticPrice,
 } = require('./utils');
 const {
     exactTokensOut,
@@ -50,6 +52,19 @@ const fs = require('fs');
 
 async function main() {
     logger.info('Program started');
+    let maticPrice = 0; // used in profit calculation
+
+    // update matic price every 5 seconds
+    setInterval(async () => {
+        try{
+            const price = await getMaticPrice();
+            maticPrice = Number(price);
+            logger.info("Updated Matic price.")
+        } catch (e) {
+            logger.error("Failed to update Matic price", e);
+        }
+    }, 20000);
+
     const wsProvider = new ethers.providers.WebSocketProvider(WS_LOCAL);
     let providers = HTTPS_ENDPOINTS.map(
         (endpoint) => new ethers.providers.JsonRpcProvider(endpoint)
@@ -473,27 +488,6 @@ async function main() {
                 return;
             }
 
-            if (path.profitusd < 0.02) {
-                // Profit of the best path is too low, skip arbitrage transaction
-                logger.info(
-                    `Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`
-                );
-                return;
-            }
-
-            // Display the profitable path
-            logger.info(
-                `Profitable path: $${path.profitusd} ${
-                    SAFE_TOKENS[path.rootToken].symbol
-                } ${
-                    Number(path.profitwei) /
-                    10 ** SAFE_TOKENS[path.rootToken].decimals
-                } block #${blockNumber}`
-            );
-
-            // Store profit in profitStore
-            profitStore[path.rootToken] += path.profitwei;
-
             // Check if the trade has 3 pools (2 pools not yet implemented)
             if (path.pools.length != 3) {
                 logger.info(
@@ -513,48 +507,82 @@ async function main() {
 
             lastTxCount = await wsProvider.getTransactionCount(SENDER_ADDRESS);
 
-            // Make sure that we are still working on the latest block
-            if (blockNumber < lastBlockNumber) {
-                logger.info(
-                    `New block mined (${lastBlockNumber}), skipping block #${blockNumber}`
-                );
-                return;
-            }
-
             const competiveTxArray = pendingTxArray.filter(
                 (e) => e.blockNumber == blockNumber
             );
 
             logger.info(
-                `Number of competive traransactions: ${competiveTxArray.length}`
+                `Number of competive transactions: ${competiveTxArray.length}`
             );
 
-            let txObject;
+            // gas price calculation
+            let gasPrice;
+            let maxFeePerGas;
+            let maxPriorityFeePerGas;
+
             if (competiveTxArray.length > 0) {
-                // build a front transaction so that it can be placed before the competive tx
-                txObject = await buildFrontRunTx(
-                    path,
-                    tradeContract,
-                    approvedTokens,
-                    logger,
-                    signer,
-                    lastTxCount,
-                    competiveTxArray[0].txnData
-                );
+                // build frontrun tx
+                if (targetTx['type'] == 2) {
+                    maxPriorityFeePerGas = targetTx[
+                        'maxPriorityFeePerGas'
+                    ]
+                        .mul(101)
+                        .div(100);
+                    maxFeePerGas = targetTx['maxFeePerGas']
+                        .sub(targetTx['maxPriorityFeePerGas'])
+                        .add(maxPriorityFeePerGas);
+                    gasPrice = maxFeePerGas;
+                } else {
+                    gasPrice = targetTx['gasPrice'].mul(101).div(100);
+                }
             } else {
                 const block = await wsProvider.getBlock();
 
                 // if there aren't competive transactions, build type2 transactions
 
                 // set maxPriorityFee as 60 gwei, this amount is enough to be included in the n+2 block
-                const maxPriorityFee = ethers.utils.parseUnits('60', 'gwei');
+                maxPriorityFeePerGas = ethers.utils.parseUnits('60', 'gwei');
 
                 // set maxFeePerGas as (baseFee of previous) * 2 + maxPriorityFee
                 // this guarantees tx will be included within the next 5 blocks
-                const maxFeePerGas = block.baseFeePerGas
+                maxFeePerGas = block.baseFeePerGas
                     .mul(2)
-                    .add(maxPriorityFee);
+                    .add(maxPriorityFeePerGas);
 
+                gasPrice = maxFeePerGas;
+            }
+
+            // check if profitable considering gas cost
+            const gasFeeEth = Number(
+                ethers.utils.formatEther(
+                    gasPrice.mul(ethers.BigNumber.from(GAS_LIMIT))
+                )
+            );
+            const gasFeeUSD = gasFeeEth * maticPrice;
+
+            if (Number(path.profitusd) < gasFeeUSD) {
+                // Profit of the best path is too low, skip arbitrage transaction
+                logger.info(
+                    `Profit too low ($${path.profitusd} USD), skipping arbitrage transaction.`
+                );
+                return;
+            }
+
+            // Display the profitable path
+            logger.info(
+                `Profitable path: $${path.profitusd} ${
+                    SAFE_TOKENS[path.rootToken].symbol
+                } ${
+                    Number(path.profitwei) /
+                    10 ** SAFE_TOKENS[path.rootToken].decimals
+                } block #${blockNumber}`
+            );
+
+            logger.info(
+                `Estimated Gas Fee: $${gasFeeUSD}`
+            );
+
+            if(maxPriorityFeePerGas) {
                 txObject = await buildTx(
                     path,
                     tradeContract,
@@ -563,8 +591,26 @@ async function main() {
                     signer,
                     lastTxCount,
                     maxFeePerGas,
-                    maxPriorityFee
+                    maxPriorityFeePerGas
                 );
+            } else {
+                txObject = await buildLegacyTx(
+                    path,
+                    tradeContract,
+                    approvedTokens,
+                    logger,
+                    signer,
+                    lastTxCount,
+                    gasPrice
+                )
+            }
+
+            // Make sure that we are still working on the latest block
+            if (blockNumber < lastBlockNumber) {
+                logger.info(
+                    `New block mined (${lastBlockNumber}), skipping block #${blockNumber}`
+                );
+                return;
             }
 
             if (lastSubmittedBlock + 1 == blockNumber) {
@@ -573,6 +619,9 @@ async function main() {
             }
 
             lastSubmittedBlock = blockNumber;
+
+            // Store profit in profitStore
+            profitStore[path.rootToken] += path.profitwei;
 
             // Send arbitrage transaction
             logger.info(
@@ -630,16 +679,12 @@ async function main() {
                 },
             ]);
 
-            let logs = extractLogsFromSimulation(response);
+            const logs = extractLogsFromSimulation(response);
 
             if (logs.length == 0) return;
 
-            let touchablePoolAddresses = [];
-
             const poolInfo = getPoolsFromLogs(logs, pools);
-            touchablePoolAddresses = poolInfo.touchablePoolAddresses;
-            touchablePoolsV2 = poolInfo.touchablePoolsV2;
-            touchablePoolsV3 = poolInfo.touchablePoolsV3;
+            const touchablePoolAddresses = poolInfo.touchablePoolAddresses;
 
             if (touchablePoolAddresses.length == 0) return;
 

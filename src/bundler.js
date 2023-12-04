@@ -8,7 +8,7 @@ const {
     FlashbotsBundleProvider,
 } = require('@flashbots/ethers-provider-bundle');
 const uuid = require('uuid');
-const { CHAIN_ID } = require('./constants');
+const { CHAIN_ID, GAS_LIMIT } = require('./constants');
 const { BOT_ABI, PRIVATE_RELAY } = require('./constants');
 const { exactTokensOut } = require('./simulator');
 
@@ -208,7 +208,7 @@ async function buildBlankTx(
         to: signer.address,
         data: '0x',
         type: 2,
-        gasLimit: 2000000, // 2M gas
+        gasLimit: GAS_LIMIT, // 2M gas
         maxFeePerGas: lastGasPrice.mul(100 + tipPercent).div(100),
         maxPriorityFeePerGas: lastGasPrice.mul(tipPercent).div(100),
         nonce: lastTxCount,
@@ -238,7 +238,7 @@ async function buildTx(
             initialAction,
         ]),
         type: 2,
-        gasLimit: 2000000, // 2M gas
+        gasLimit: GAS_LIMIT, // 2M gas
         maxFeePerGas,
         maxPriorityFeePerGas,
         nonce: lastTxCount,
@@ -267,7 +267,7 @@ async function buildLegacyTx(
             initialAction,
         ]),
         type: 0,
-        gasLimit: 2000000, // 2M gas
+        gasLimit: GAS_LIMIT, // 2M gas
         gasPrice,
         nonce: lastTxCount,
         chainId: CHAIN_ID,
@@ -297,7 +297,7 @@ async function buildBackRunTx(
                 initialAction,
             ]),
             type: 2,
-            gasLimit: 2000000, // 2M gas
+            gasLimit: GAS_LIMIT, // 2M gas
             maxFeePerGas: targetTx['maxFeePerGas'],
             maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas'],
             nonce: lastTxCount,
@@ -311,7 +311,7 @@ async function buildBackRunTx(
                 initialAction,
             ]),
             type: 0,
-            gasLimit: 2000000, // 2M gas
+            gasLimit: GAS_LIMIT, // 2M gas
             gasPrice: targetTx['gasPrice'],
             nonce: lastTxCount,
             chainId: CHAIN_ID,
@@ -341,7 +341,7 @@ async function buildFrontRunTx(
                 initialAction,
             ]),
             type: 2,
-            gasLimit: 2000000, // 2M gas
+            gasLimit: GAS_LIMIT, // 2M gas
             maxFeePerGas: targetTx['maxFeePerGas'],
             maxPriorityFeePerGas: targetTx['maxPriorityFeePerGas']
                 .mul(101)
@@ -357,7 +357,7 @@ async function buildFrontRunTx(
                 initialAction,
             ]),
             type: 0,
-            gasLimit: 2000000, // 2M gas
+            gasLimit: GAS_LIMIT, // 2M gas
             gasPrice: targetTx['gasPrice'].mul(101).div(100),
             nonce: lastTxCount,
             chainId: CHAIN_ID,

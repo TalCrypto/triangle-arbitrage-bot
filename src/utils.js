@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 const axios = require('axios');
 
-const { BLOCKNATIVE_TOKEN, CHAIN_ID, logger } = require('./constants');
+const { BLOCKNATIVE_TOKEN, CHAIN_ID, logger, MATIC_PRICE_API_URL } = require('./constants');
 
 const calculateNextBlockBaseFee = (block) => {
     let baseFee = BigInt(block.baseFeePerGas);
@@ -325,6 +325,14 @@ function isSamePendingArrays(pendingArray1, pendingArray2) {
     return true;
 }
 
+async function getMaticPrice() {
+    return fetch(MATIC_PRICE_API_URL).then((response) => response.text())
+    .then((body) => {
+        const res = JSON.parse(body);
+        return res['aave-polygon-wmatic']['usd'];
+    });
+}
+
 module.exports = {
     calculateNextBlockBaseFee,
     estimateNextBlockGas,
@@ -335,4 +343,5 @@ module.exports = {
     extractLogsFromSimulation,
     getPoolsFromLogs,
     isSamePendingArrays,
+    getMaticPrice
 };

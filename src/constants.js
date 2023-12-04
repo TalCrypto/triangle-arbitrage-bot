@@ -203,4 +203,6 @@ module.exports = {
     WSS_URL:
         'wss://polygon-mainnet.g.alchemy.com/v2/KRAnq0xLYyvFY8t5uU6WvMzZ1dm9RIRD',
     WS_LOCAL: 'ws://127.0.0.1:8546',
+    GAS_LIMIT: 2000000,
+    MATIC_PRICE_API_URL: "https://api.coingecko.com/api/v3/simple/price?ids=aave-polygon-wmatic&vs_currencies=usd"
 };
