@@ -235,18 +235,6 @@ async function main() {
         // Start of block timer
         let sblock = new Date();
 
-        // Old block guard
-        if (blockNumber <= lastBlockNumber) {
-            // We have already processed this block, or an older one. Ignore it.
-            logger.info(
-                `Ignoring old block #${blockNumber} (latest block is #${lastBlockNumber})`
-            );
-            return;
-        } else {
-            // We are currently processing the latest block
-            lastBlockNumber = blockNumber;
-        }
-
         try {
             logger.info(`=== New Block #${blockNumber}`);
 
