@@ -678,11 +678,11 @@ async function main() {
 
             if (touchablePoolAddresses.length == 0) return;
 
-            logger.info(
-                `===== Found an opportunity transaction ${pendingTx} : ${touchablePoolAddresses.length} touchable pools =====`
-            );
-
             const blockNumber = await wsProvider.getBlockNumber();
+
+            logger.info(
+                `===== Found an opportunity transaction ${pendingTx} : ${touchablePoolAddresses.length} touchable pools. Block #${blockNumber} =====`
+            );
 
             cachePendingTransaction(blockNumber, txnData);
         } catch (e) {
