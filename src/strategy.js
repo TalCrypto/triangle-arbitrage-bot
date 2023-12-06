@@ -636,15 +636,16 @@ async function main() {
                 txObject,
             ]);
 
-            const txnData = await wsProvider.getTransaction(txHash);
-
-            cachePendingTransaction(blockNumber, txnData);
-
             logger.info(
                 `Finished sending tx: ${txHash}. End-to-end delay ${
                     (Date.now() - sblock) / 1000
                 } s`
             );
+
+            const txnData = await wsProvider.getTransaction(txHash);
+
+            cachePendingTransaction(blockNumber, txnData);
+
         } catch (e) {
             logger.error(`Error while processing block #${blockNumber}: ${e}`);
         } finally {
